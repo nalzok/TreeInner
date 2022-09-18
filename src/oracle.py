@@ -239,6 +239,7 @@ def visualize(oracle_auc, mdi_error, error_test):
                 x="num_boost_round", y="error_test", hue="method", data=error_test_quadrant
             )
             ax.figure.savefig(f"results/error-test+{param_str}+{subproblem}{subproblem_id}.png")
+            plt.close(ax.figure)
 
 
 if __name__ == "__main__":
