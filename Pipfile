@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "*"
+pandas = "*"
+xgboost = {path = "xgboost-1.6.2_lambda-cp38-cp38-linux_x86_64.whl", platform_system = "== 'Linux'"}
+scikit-learn = "*"
+matplotlib = "*"
+seaborn = "*"
+tqdm = "*"
+
+[dev-packages]
+black = "*"
+
+[requires]
+python_version = "3.8"
