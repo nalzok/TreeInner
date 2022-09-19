@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm, trange
 from sklearn import metrics
+import matplotlib.pyplot as plt
 import seaborn as sns
 from .utils import (
     permutation_importance,
@@ -11,7 +12,7 @@ from .utils import (
     generalization_error,
 )
 
-num_boost_rounds = (1, 2, 4, 8, 16, 32, 64)
+num_boost_rounds = (1, 2, 4, 8, 16, 32, 64, 128)
 
 param = {
     "max_depth": 4,

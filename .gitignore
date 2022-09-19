@@ -158,3 +158,4 @@ tags
 # End of https://www.gitignore.io/api/r,c++,vim,linux,macos,jupyternotebooks
 
 04_aggregate/
+results/
