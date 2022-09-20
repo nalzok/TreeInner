@@ -29,7 +29,7 @@ def feature_importance(
     verbosity=0,
 ):
     # sanity check
-    for name in ["max_depth", "eta", "base_score", "objective", "reg_lambda"]:
+    for name in ["max_depth", "eta", "base_score", "objective", "reg_lambda", "reg_alpha"]:
         assert name in param, "{} should be in param.".format(name)
 
     time_begin = time()
@@ -198,7 +198,7 @@ def permutation_importance(
     Y_train, X_train, Y_valid, X_valid, param, num_boost_round=1, perm_round=5
 ):
     # sanity check
-    for name in ["max_depth", "eta", "base_score", "objective", "reg_lambda"]:
+    for name in ["max_depth", "eta", "base_score", "objective", "reg_lambda", "reg_alpha"]:
         assert name in param, "{} should be in param.".format(name)
 
     time_begin = time()
@@ -245,7 +245,7 @@ def generalization_error(
     Y_train, X_train, Y_test, X_test, param, num_boost_round, coef=None, use_saabas=True, do_sanity_check=True
 ):
     # sanity check
-    for name in ["max_depth", "eta", "base_score", "objective", "reg_lambda"]:
+    for name in ["max_depth", "eta", "base_score", "objective", "reg_lambda", "reg_alpha"]:
         assert name in param, "{} should be in param.".format(name)
 
     # build DMatrix from data frames

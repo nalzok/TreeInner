@@ -19,6 +19,7 @@ param = {
     "eta": 0.1,
     "base_score": 0.5,
     "reg_lambda": 1,
+    "reg_alpha": 0.5,
 }
 
 DATA_PATH = "04_aggregate"
