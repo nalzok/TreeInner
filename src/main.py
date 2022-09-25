@@ -14,7 +14,7 @@ from .importance import (
 
 
 def main(data_root, param, num_boost_rounds):
-    for name in ["max_depth", "eta", "base_score", "objective", "reg_lambda"]:
+    for name in ["max_depth", "eta", "base_score", "reg_lambda"]:
         assert name in param, "{} should be in param.".format(name)
 
     param_str = "+".join(k + "=" + str(v) for k, v in param.items()).replace(".", "p")
@@ -42,13 +42,14 @@ def main(data_root, param, num_boost_rounds):
                 )
 
     results = Path("results")
-    results.mkdir(parents=True, exist_ok=True)
+    (results / "csv").mkdir(parents=True, exist_ok=True)
+    (results / "plots").mkdir(parents=True, exist_ok=True)
 
     oracle_auc = pd.DataFrame(oracle_auc_row)
-    oracle_auc.to_csv(results / f"oracle-auc+{param_str}.csv")
+    oracle_auc.to_csv(results / "csv" / f"oracle-auc+{param_str}.csv")
 
     mdi_error = pd.DataFrame(mdi_error_row)
-    mdi_error.to_csv(results / f"mdi-error+{param_str}.csv")
+    mdi_error.to_csv(results / "csv" / f"mdi-error+{param_str}.csv")
 
     visualize(results, param_str)
 
@@ -92,10 +93,10 @@ def experiment(
                 if algo == "Saabas" and oob is False:
                     total_gain = score
 
-                domain = "oob" if oob else "ib"
+                domain = "-oob" if oob else ""
                 oracle_auc_row.append(
                     {
-                        "method": f"TotalGain-{algo}-{domain}",
+                        "method": f"TotalGain-{algo}{domain}",
                         "auc_noisy": roc_auc_score(signal, score),
                         "elapsed": elapsed,
                         **common,
@@ -107,7 +108,7 @@ def experiment(
         )
         oracle_auc_row.append(
             {
-                "method": "Permutation (perm_round = 5)",
+                "method": "Permutation",
                 "auc_noisy": roc_auc_score(signal, score),
                 "elapsed": elapsed,
                 **common,
@@ -124,7 +125,9 @@ def experiment(
 
 
 def visualize(results, param_str):
-    oracle_auc = pd.read_csv(results / f"oracle-auc+{param_str}.csv")
+    oracle_auc = pd.read_csv(results / "csv" / f"oracle-auc+{param_str}.csv")
+    oracle_auc["log10(elapsed)"] = np.log10(oracle_auc["elapsed"])
+
     sns_plot = sns.catplot(
         x="num_boost_round",
         y="auc_noisy",
@@ -134,9 +137,7 @@ def visualize(results, param_str):
         kind="box",
         data=oracle_auc,
     )
-    sns_plot.savefig(f"results/oracle-auc+{param_str}.png")
-
-    oracle_auc["log10(elapsed)"] = np.log10(oracle_auc["elapsed"])
+    sns_plot.savefig(results / "plots" / f"oracle-auc+{param_str}.png")
     sns_plot = sns.catplot(
         x="num_boost_round",
         y="log10(elapsed)",
@@ -146,9 +147,10 @@ def visualize(results, param_str):
         kind="box",
         data=oracle_auc,
     )
-    sns_plot.savefig(f"results/oracle-elapsed+{param_str}.png")
+    sns_plot.savefig(results / "plots" / f"oracle-elapsed+{param_str}.png")
 
-    mdi_error = pd.read_csv(f"results/mdi-error+{param_str}.csv")
+
+    mdi_error = pd.read_csv(results / "csv" / f"mdi-error+{param_str}.csv")
     mdi_error["log10(error)"] = np.log10(mdi_error["error"])
 
     sns_plot = sns.catplot(
@@ -161,7 +163,7 @@ def visualize(results, param_str):
         data=mdi_error,
     )
 
-    sns_plot.savefig(f"results/mdi-error+{param_str}.png")
+    sns_plot.savefig(results / "plots" / f"mdi-error+{param_str}.png")
 
 
 if __name__ == "__main__":
@@ -181,6 +183,6 @@ if __name__ == "__main__":
         "reg_lambda": 1,
     }
 
-    num_boost_rounds = (1, 2, 4, 8, 16, 32, 64, 128)
+    num_boost_rounds = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
 
     main(data_root, param, num_boost_rounds)
