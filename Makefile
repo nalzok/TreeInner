@@ -1,4 +1,4 @@
 .PHONY: oracle
 
 oracle:
-	pipenv run python3 -m pyinstrument -m src.main
+	time pipenv run python3 -m pyinstrument -m src.main
