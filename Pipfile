@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 numpy = "*"
 pandas = "*"
-xgboost = {path = "xgboost-1.6.2_lambda-cp38-cp38-linux_x86_64.whl", platform_system = "== 'Linux'"}
+xgboost = {path = "xgboost-1.6.2.dev0-cp38-cp38-linux_x86_64.whl", platform_system = "== 'Linux'"}
 scikit-learn = "*"
 matplotlib = "*"
 seaborn = "*"
