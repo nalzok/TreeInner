@@ -5,7 +5,7 @@ from time import time
 import numpy as np
 import pandas as pd
 from scipy.special import expit
-from scipy.stats import spearmanr, ConstantInputWarning
+from scipy.stats import pearsonr, spearmanr, ConstantInputWarning
 from sklearn.metrics import mean_squared_error, roc_auc_score
 import xgboost as xgb
 
@@ -52,6 +52,17 @@ def feature_importance(
     if correlation == "Covariance":
         MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
         MDI = MDI[:-1] / param["eta"]
+    elif correlation == "Pearson":
+        MDI = np.zeros(contributions_by_tree.shape[-1] - 1)
+        with catch_warnings():
+            simplefilter("ignore", ConstantInputWarning)
+            for k in range(MDI.size):
+                for t in range(gradient_by_tree.shape[0]):
+                    y_true = gradient_by_tree[t, :, 0]
+                    y_score = contributions_by_tree[t, :, k]
+                    corr = pearsonr(y_true, y_score)
+                    if not np.isnan(corr.correlation):
+                        MDI[k] += corr.correlation
     elif correlation == "Spearman":
         MDI = np.zeros(contributions_by_tree.shape[-1] - 1)
         with catch_warnings():

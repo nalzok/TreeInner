@@ -84,7 +84,7 @@ def experiment(
         }
 
         total_gain = None
-        for correlation in ("Covariance", "Spearman", "AbsoluteValue"):
+        for correlation in ("Covariance", "Pearson", "Spearman", "AbsoluteValue"):
             for oob in (False, True):
                 for algo in ("Saabas", "SHAP"):
                     dimportance = dvalid if oob else dtrain
