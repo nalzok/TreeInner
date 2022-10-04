@@ -61,8 +61,8 @@ def feature_importance(
                     y_true = gradient_by_tree[t, :, 0]
                     y_score = contributions_by_tree[t, :, k]
                     corr = pearsonr(y_true, y_score)
-                    if not np.isnan(corr.correlation):
-                        MDI[k] += corr.correlation
+                    if not np.isnan(corr.statistic):
+                        MDI[k] += corr.statistic
     elif correlation == "Spearman":
         MDI = np.zeros(contributions_by_tree.shape[-1] - 1)
         with catch_warnings():
