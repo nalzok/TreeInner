@@ -84,24 +84,25 @@ def experiment(
         }
 
         total_gain = None
-        for algo in ("Saabas", "ApproxSHAP", "SHAP"):
+        for correlation in ("Covariance", "Spearman", "AbsoluteValue"):
             for oob in (False, True):
-                dimportance = dvalid if oob else dtrain
-                score, elapsed = feature_importance(
-                    dtrain, dimportance, param, num_boost_round, algo
-                )
-                if algo == "Saabas" and oob is False:
-                    total_gain = score
+                for algo in ("Saabas", "SHAP"):
+                    dimportance = dvalid if oob else dtrain
+                    score, elapsed = feature_importance(
+                        dtrain, dimportance, param, num_boost_round, correlation, algo,
+                    )
+                    if correlation == "Covariance" and oob is False and algo == "Saabas":
+                        total_gain = score
 
-                domain = "-oob" if oob else ""
-                oracle_auc_row.append(
-                    {
-                        "method": f"TotalGain-{algo}{domain}",
-                        "auc_noisy": roc_auc_score(signal, score),
-                        "elapsed": elapsed,
-                        **common,
-                    }
-                )
+                    domain = "valid" if oob else "train"
+                    oracle_auc_row.append(
+                        {
+                            "method": f"{correlation}-{algo}-{domain}",
+                            "auc_noisy": roc_auc_score(signal, score),
+                            "elapsed": elapsed,
+                            **common,
+                        }
+                    )
 
         score, elapsed = permutation_importance(
             dtrain, X_valid, Y_valid, param, num_boost_round, 5

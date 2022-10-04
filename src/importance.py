@@ -1,9 +1,11 @@
 from typing import Dict, Tuple
+from warnings import catch_warnings, simplefilter
 from time import time
 
 import numpy as np
 import pandas as pd
 from scipy.special import expit
+from scipy.stats import spearmanr, ConstantInputWarning
 from sklearn.metrics import mean_squared_error, roc_auc_score
 import xgboost as xgb
 
@@ -22,6 +24,7 @@ def feature_importance(
     dimportance: xgb.DMatrix,
     param: Dict,
     num_boost_round: int,
+    correlation: str,
     algo: str,
 ) -> Tuple[np.ndarray, float]:
     time_begin = time()
@@ -46,8 +49,25 @@ def feature_importance(
     )
     gradient_by_tree = gradient_by_tree[:, :, np.newaxis]
 
-    MDI = np.sum(contributions_by_tree * gradient_by_tree, (0, 1))
-    MDI = MDI[:-1] / param["eta"]
+    if correlation == "Covariance":
+        MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
+        MDI = MDI[:-1] / param["eta"]
+    elif correlation == "Spearman":
+        MDI = np.zeros(contributions_by_tree.shape[-1] - 1)
+        with catch_warnings():
+            simplefilter("ignore", ConstantInputWarning)
+            for k in range(MDI.size):
+                for t in range(gradient_by_tree.shape[0]):
+                    y_true = gradient_by_tree[t, :, 0]
+                    y_score = contributions_by_tree[t, :, k]
+                    corr = spearmanr(y_true, y_score)
+                    if not np.isnan(corr.correlation):
+                        MDI[k] += corr.correlation
+    elif correlation == "AbsoluteValue":
+        # ignore the per-tree bias
+        MDI = np.sum(np.abs(contributions_by_tree[:, :, :-1]), axis=(0, 1))
+    else:
+        raise ValueError(f"Unknown correlation metric {correlation}")
 
     return MDI, time() - time_begin
 
@@ -184,7 +204,7 @@ def validate_total_gain(
     total_gain_dict = bst_all_in_one.get_score(importance_type="total_gain")
     total_gain = np.array(
         [total_gain_dict.get(f, 0) for f in bst_all_in_one.feature_names]
-    )
+    ).astype('float64')
 
     total_gain /= np.sum(total_gain)
     candidate /= np.sum(candidate)
