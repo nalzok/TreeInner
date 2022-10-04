@@ -137,6 +137,8 @@ def visualize(results, param_str):
         hue="method",
         kind="box",
         data=oracle_auc,
+        height=16,
+        aspect=2
     )
     sns_plot.savefig(results / "plots" / f"oracle-auc+{param_str}.png")
     sns_plot = sns.catplot(
@@ -147,6 +149,8 @@ def visualize(results, param_str):
         hue="method",
         kind="box",
         data=oracle_auc,
+        height=16,
+        aspect=2
     )
     sns_plot.savefig(results / "plots" / f"oracle-elapsed+{param_str}.png")
 
@@ -173,7 +177,7 @@ if __name__ == "__main__":
     ), "A custom fork of XGBoost is required. See https://github.com/nalzok/xgboost/tree/release_1.6.0"
 
     np.random.seed(42)
-    sns.set(style="whitegrid")
+    sns.set_theme(style="whitegrid", rc={"savefig.dpi": 300})
 
     data_root = Path("04_aggregate")
 
