@@ -1,6 +1,5 @@
-from typing import Dict, Tuple
+from typing import Dict, List
 from warnings import catch_warnings, simplefilter
-from time import time
 
 import numpy as np
 import pandas as pd
@@ -19,24 +18,42 @@ transformation = {
 }
 
 
-def feature_importance(
+def train_boosters(
     dtrain: xgb.DMatrix,
-    dimportance: xgb.DMatrix,
     param: Dict,
     num_boost_round: int,
+) -> List[xgb.Booster]:
+    # reset the margin of dtrain
+    dtrain.set_base_margin([])
+
+    boosters = []
+    for _ in range(num_boost_round):
+        # train a new tree
+        bst = xgb.train(param, dtrain, 1, verbose_eval=False)
+        boosters.append(bst)
+
+        # output the prediction decomposition using all the available trees
+        ptrain_tree = bst.predict(dtrain, output_margin=True)
+        # reset the margin to incorporate all the previous trees' prediction
+        dtrain.set_base_margin(ptrain_tree)
+
+    return boosters
+
+
+def feature_importance(
+    boosters: List[xgb.Booster],
+    dimportance: xgb.DMatrix,
+    param: Dict,
     correlation: str,
     algo: str,
-) -> Tuple[np.ndarray, float]:
-    time_begin = time()
-
-    # reset the margin of dtrain & dimportance
-    dtrain.set_base_margin([])
+) -> np.ndarray:
+    # reset the margin of dimportance
     dimportance.set_base_margin([])
 
     # train a boosting forest with DTRAIN, use it to make prediction for dimportance,
     # and decompose the result into feature contributions
     contributions_by_tree = _compute_contribution(
-        dtrain, dimportance, param, num_boost_round, algo
+        boosters, dimportance, param, algo
     )
 
     # compute gradient
@@ -45,7 +62,7 @@ def feature_importance(
         contributions_by_tree,
         param["objective"],
         param["base_score"],
-        num_boost_round,
+        len(boosters),
     )
     gradient_by_tree = gradient_by_tree[:, :, np.newaxis]
 
@@ -80,26 +97,22 @@ def feature_importance(
     else:
         raise ValueError(f"Unknown correlation metric {correlation}")
 
-    return MDI, time() - time_begin
+    return MDI
 
 
 def _compute_contribution(
-    dtrain: xgb.DMatrix,
+    boosters: List[xgb.Booster],
     dimportance: xgb.DMatrix,
     param: Dict,
-    num_boost_round: int,
     algo: str,
 ) -> np.ndarray:
     # store the feature contribution of each tree
     contributions_by_tree = np.zeros(
-        (num_boost_round, dimportance.num_row(), dimportance.num_col() + 1),
+        (len(boosters), dimportance.num_row(), dimportance.num_col() + 1),
         dtype=np.float32,
     )
 
-    for t in range(num_boost_round):
-        # train a new tree
-        bst = xgb.train(param, dtrain, 1, verbose_eval=False)
-
+    for t, bst in enumerate(boosters):
         # compute the contribution_by_tree
         if algo == "Saabas":
             pvalid_tree = bst.predict(
@@ -128,11 +141,6 @@ def _compute_contribution(
                 contributions_by_tree[:t, :, :], axis=(0, 2)
             )
 
-        # output the prediction decomposition using all the available trees
-        ptrain_tree = bst.predict(dtrain, output_margin=True)
-
-        # reset the margin to incorporate all the previous trees' prediction
-        dtrain.set_base_margin(ptrain_tree)
         dimportance.set_base_margin(np.sum(pvalid_tree, axis=1))
 
     return contributions_by_tree
@@ -168,9 +176,7 @@ def permutation_importance(
     param: Dict,
     num_boost_round: int,
     perm_round: int,
-) -> Tuple[np.ndarray, float]:
-    time_begin = time()
-
+) -> np.ndarray:
     # train a boosting forest with DTRAIN, which will be used to make prediction for dimportance
     bst = xgb.train(param, dtrain, num_boost_round, verbose_eval=False)
 
@@ -202,7 +208,7 @@ def permutation_importance(
 
         importances[idx] = baseline - loss_sum / perm_round
 
-    return importances, time() - time_begin
+    return importances
 
 
 def validate_total_gain(

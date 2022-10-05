@@ -3,10 +3,11 @@ from pathlib import Path
 import xgboost as xgb
 import numpy as np
 import pandas as pd
-from tqdm import tqdm, trange
+from tqdm import trange, tqdm
 from sklearn.metrics import roc_auc_score
 import seaborn as sns
 from .importance import (
+    train_boosters,
     feature_importance,
     permutation_importance,
     validate_total_gain,
@@ -29,7 +30,7 @@ def main(data_root, param, num_boost_rounds):
         for subproblem_id in (1, 2):
             print(f"Working on {subproblem}{subproblem_id}")
             subdirectory = data_root / f"{subproblem}{subproblem_id}"
-            for i in trange(40):
+            for i in trange(40, leave=False):
                 experiment(
                     subdirectory,
                     param,
@@ -82,14 +83,15 @@ def experiment(
             "dataset_id": i,
             "num_boost_round": num_boost_round,
         }
+        boosters = train_boosters(dtrain, param, num_boost_round)
 
         total_gain = None
         for correlation in ("Covariance", "Pearson", "Spearman", "AbsoluteValue"):
             for oob in (False, True):
                 for algo in ("Saabas", "SHAP"):
                     dimportance = dvalid if oob else dtrain
-                    score, elapsed = feature_importance(
-                        dtrain, dimportance, param, num_boost_round, correlation, algo,
+                    score = feature_importance(
+                        boosters, dimportance, param, correlation, algo,
                     )
                     if correlation == "Covariance" and oob is False and algo == "Saabas":
                         total_gain = score
@@ -99,19 +101,17 @@ def experiment(
                         {
                             "method": f"{correlation}-{algo}-{domain}",
                             "auc_noisy": roc_auc_score(signal, score),
-                            "elapsed": elapsed,
                             **common,
                         }
                     )
 
-        score, elapsed = permutation_importance(
+        score = permutation_importance(
             dtrain, X_valid, Y_valid, param, num_boost_round, 5
         )
         oracle_auc_row.append(
             {
                 "method": "Permutation",
                 "auc_noisy": roc_auc_score(signal, score),
-                "elapsed": elapsed,
                 **common,
             }
         )
@@ -127,8 +127,6 @@ def experiment(
 
 def visualize(results, param_str):
     oracle_auc = pd.read_csv(results / "csv" / f"oracle-auc+{param_str}.csv")
-    oracle_auc["log10(elapsed)"] = np.log10(oracle_auc["elapsed"])
-
     sns_plot = sns.catplot(
         x="num_boost_round",
         y="auc_noisy",
@@ -141,23 +139,10 @@ def visualize(results, param_str):
         aspect=2
     )
     sns_plot.savefig(results / "plots" / f"oracle-auc+{param_str}.png")
-    sns_plot = sns.catplot(
-        x="num_boost_round",
-        y="log10(elapsed)",
-        col="subproblem",
-        row="subproblem_id",
-        hue="method",
-        kind="box",
-        data=oracle_auc,
-        height=16,
-        aspect=2
-    )
-    sns_plot.savefig(results / "plots" / f"oracle-elapsed+{param_str}.png")
 
 
     mdi_error = pd.read_csv(results / "csv" / f"mdi-error+{param_str}.csv")
     mdi_error["log10(error)"] = np.log10(mdi_error["error"])
-
     sns_plot = sns.catplot(
         x="num_boost_round",
         y="log10(error)",
@@ -167,7 +152,6 @@ def visualize(results, param_str):
         palette=sns.color_palette("Blues", n_colors=len(num_boost_rounds)),
         data=mdi_error,
     )
-
     sns_plot.savefig(results / "plots" / f"mdi-error+{param_str}.png")
 
 
