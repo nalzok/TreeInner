@@ -76,6 +76,7 @@ def experiment(
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
     dvalid = xgb.DMatrix(X_valid, Y_valid, silent=True)
 
+    boosters = train_boosters(dtrain, max(num_boost_rounds), param)
     for num_boost_round in tqdm(num_boost_rounds, leave=False):
         common = {
             "subproblem": subproblem,
@@ -83,7 +84,6 @@ def experiment(
             "dataset_id": i,
             "num_boost_round": num_boost_round,
         }
-        boosters = train_boosters(dtrain, param, num_boost_round)
 
         total_gain = None
         for correlation in ("Covariance", "Pearson", "Spearman", "AbsoluteValue"):
@@ -91,7 +91,7 @@ def experiment(
                 for algo in ("Saabas", "SHAP"):
                     dimportance = dvalid if oob else dtrain
                     score = feature_importance(
-                        boosters, dimportance, param, correlation, algo,
+                        dimportance, boosters, num_boost_round, param, correlation, algo,
                     )
                     if correlation == "Covariance" and oob is False and algo == "Saabas":
                         total_gain = score

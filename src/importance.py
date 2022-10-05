@@ -20,8 +20,8 @@ transformation = {
 
 def train_boosters(
     dtrain: xgb.DMatrix,
-    param: Dict,
     num_boost_round: int,
+    param: Dict,
 ) -> List[xgb.Booster]:
     # reset the margin of dtrain
     dtrain.set_base_margin([])
@@ -41,8 +41,9 @@ def train_boosters(
 
 
 def feature_importance(
-    boosters: List[xgb.Booster],
     dimportance: xgb.DMatrix,
+    boosters: List[xgb.Booster],
+    num_boost_round: int,
     param: Dict,
     correlation: str,
     algo: str,
@@ -53,16 +54,16 @@ def feature_importance(
     # train a boosting forest with DTRAIN, use it to make prediction for dimportance,
     # and decompose the result into feature contributions
     contributions_by_tree = _compute_contribution(
-        boosters, dimportance, param, algo
+        dimportance, boosters, num_boost_round, param, algo
     )
 
     # compute gradient
     gradient_by_tree = _compute_gradient(
-        dimportance,
         contributions_by_tree,
+        dimportance,
         param["objective"],
         param["base_score"],
-        len(boosters),
+        num_boost_round,
     )
     gradient_by_tree = gradient_by_tree[:, :, np.newaxis]
 
@@ -101,18 +102,22 @@ def feature_importance(
 
 
 def _compute_contribution(
-    boosters: List[xgb.Booster],
     dimportance: xgb.DMatrix,
+    boosters: List[xgb.Booster],
+    num_boost_round: int,
     param: Dict,
     algo: str,
 ) -> np.ndarray:
+    # reset the margin of dimportance
+    dimportance.set_base_margin([])
+
     # store the feature contribution of each tree
     contributions_by_tree = np.zeros(
-        (len(boosters), dimportance.num_row(), dimportance.num_col() + 1),
+        (num_boost_round, dimportance.num_row(), dimportance.num_col() + 1),
         dtype=np.float32,
     )
 
-    for t, bst in enumerate(boosters):
+    for t, bst in enumerate(boosters[:num_boost_round]):
         # compute the contribution_by_tree
         if algo == "Saabas":
             pvalid_tree = bst.predict(
@@ -147,8 +152,8 @@ def _compute_contribution(
 
 
 def _compute_gradient(
-    dimportance: xgb.DMatrix,
     contributions_by_tree: np.ndarray,
+    dimportance: xgb.DMatrix,
     objective: str,
     base_score: float,
     num_boost_round: int,
@@ -177,6 +182,9 @@ def permutation_importance(
     num_boost_round: int,
     perm_round: int,
 ) -> np.ndarray:
+    # reset the margin of dtrain
+    dtrain.set_base_margin([])
+
     # train a boosting forest with DTRAIN, which will be used to make prediction for dimportance
     bst = xgb.train(param, dtrain, num_boost_round, verbose_eval=False)
 
