@@ -31,7 +31,7 @@ def main(data_root, param, num_boost_rounds):
         for subproblem_id in (1, 2):
             print(f"Working on {subproblem}{subproblem_id}")
             subdirectory = data_root / f"{subproblem}{subproblem_id}"
-            for i in trange(2, leave=False):
+            for i in trange(40, leave=False):
                 experiment(
                     subdirectory,
                     param,
