@@ -1,15 +1,15 @@
-from typing import Dict, List
-from warnings import catch_warnings, simplefilter
+from typing import Dict, List, Optional
+from warnings import warn, catch_warnings, simplefilter
 
 import numpy as np
 import pandas as pd
-from scipy.special import expit
+from scipy.special import logit, expit
 from scipy.stats import pearsonr, spearmanr, ConstantInputWarning
 from sklearn.metrics import mean_squared_error, roc_auc_score
 import xgboost as xgb
 
 
-transformation = {
+margin2pred = {
     "reg:squarederror": lambda margins: margins,
     "reg:linear": lambda margins: margins,
     "binary:logitraw": expit,
@@ -34,7 +34,7 @@ def train_boosters(
 
         # output the prediction decomposition using all the available trees
         ptrain_tree = bst.predict(dtrain, output_margin=True)
-        # reset the margin to incorporate all the previous trees' prediction
+        # set the margin to incorporate all the previous trees' prediction
         dtrain.set_base_margin(ptrain_tree)
 
     return boosters
@@ -47,6 +47,7 @@ def feature_importance(
     param: Dict,
     correlation: str,
     algo: str,
+    dtrain: Optional[xgb.DMatrix] = None,
 ) -> np.ndarray:
     # reset the margin of dimportance
     dimportance.set_base_margin([])
@@ -54,7 +55,7 @@ def feature_importance(
     # train a boosting forest with DTRAIN, use it to make prediction for dimportance,
     # and decompose the result into feature contributions
     contributions_by_tree = _compute_contribution(
-        dimportance, boosters, num_boost_round, param, algo
+        dimportance, boosters, num_boost_round, param, algo, dtrain
     )
 
     # compute gradient
@@ -107,19 +108,21 @@ def _compute_contribution(
     num_boost_round: int,
     param: Dict,
     algo: str,
+    dtrain: Optional[xgb.DMatrix],
 ) -> np.ndarray:
     # reset the margin of dimportance
     dimportance.set_base_margin([])
 
     # store the feature contribution of each tree
-    contributions_by_tree = np.zeros(
+    contributions_by_tree = np.empty(
         (num_boost_round, dimportance.num_row(), dimportance.num_col() + 1),
         dtype=np.float32,
     )
+    base_margin = np.zeros(dimportance.num_row())
 
     for t, bst in enumerate(boosters[:num_boost_round]):
         # compute the contribution_by_tree
-        if algo == "Saabas":
+        if algo == "PreDecomp":
             pvalid_tree = bst.predict(
                 dimportance,
                 pred_contribs=True,
@@ -139,14 +142,33 @@ def _compute_contribution(
             raise ValueError(f"Unknown algorithm {algo}")
 
         contributions_by_tree[t, :, :-1] = pvalid_tree[:, :-1]
-        if t == 0:
-            contributions_by_tree[t, :, -1] = pvalid_tree[:, -1]
-        else:
-            contributions_by_tree[t, :, -1] = pvalid_tree[:, -1] - np.sum(
-                contributions_by_tree[:t, :, :], axis=(0, 2)
+        contributions_by_tree[t, :, -1] = pvalid_tree[:, -1] - base_margin
+        base_margin = np.sum(pvalid_tree, axis=-1)
+
+        # set the margin to incorporate all the previous trees' prediction
+        dimportance.set_base_margin(base_margin)
+
+    if dtrain is not None:
+        # checks if $f_{m,k}$ and the bias add up to the prediction of trees
+        arg1 = np.sum(contributions_by_tree, axis=(0, 2))
+        arg2 = np.sum(pvalid_tree, axis=1)
+        if not np.allclose(arg1, arg2, rtol=1e-5, atol=1e-5):
+            warn(
+                f"  Contributions should sum to prediction: error = {max(abs(arg1 - arg2))}, when param = {param} and num_boost_round = {num_boost_round}."
             )
 
-        dimportance.set_base_margin(np.sum(pvalid_tree, axis=1))
+        # checks if training individual trees from staged predictions is the same as training the entire tree ensemble as a whole,
+        # a.k.a. checks if boosting from prediction is done right.
+        dtrain.set_base_margin([])  # reset base margin
+        dimportance.set_base_margin([])  # reset base margin
+        bst_all_in_one = xgb.train(param, dtrain, num_boost_round, verbose_eval=False)
+        pvalid_all_in_one = bst_all_in_one.predict(dimportance, output_margin=True)
+        arg1 = np.sum(contributions_by_tree, axis=(0, 2))
+        arg2 = pvalid_all_in_one
+        if not np.allclose(arg1, arg2, rtol=1e-5, atol=1e-5):
+            warn(
+                f"  Predictions should be close: error = {max(abs(arg1 - arg2))}, when param = {param} and num_boost_round = {num_boost_round}."
+            )
 
     return contributions_by_tree
 
@@ -165,7 +187,7 @@ def _compute_gradient(
     gradient_by_tree[0, :] = dimportance.get_label() - base_score
 
     # TODO: is this correct for classification?
-    trans = transformation[objective]
+    trans = margin2pred[objective]
     for t in range(1, num_boost_round):
         gradient_by_tree[t, :] = dimportance.get_label() - trans(
             np.sum(contributions_by_tree[:t, :, :], axis=(0, 2))
@@ -175,24 +197,36 @@ def _compute_gradient(
 
 
 def permutation_importance(
-    dtrain: xgb.DMatrix,
+    boosters: List[xgb.Booster],
+    num_boost_round: int,
     X_valid: pd.DataFrame,
     Y_valid: pd.DataFrame,
     param: Dict,
-    num_boost_round: int,
     perm_round: int,
+    dtrain: Optional[xgb.DMatrix] = None,
 ) -> np.ndarray:
-    # reset the margin of dtrain
-    dtrain.set_base_margin([])
-
-    # train a boosting forest with DTRAIN, which will be used to make prediction for dimportance
-    bst = xgb.train(param, dtrain, num_boost_round, verbose_eval=False)
-
     # build DMatrix from data frames
     dimportance = xgb.DMatrix(X_valid, Y_valid, silent=True)
 
     # calculate baseline prediction accuracy
-    predictions = bst.predict(dimportance)
+    margin = np.full(dimportance.num_row(), param["base_score"])
+    for bst in boosters[:num_boost_round]:
+        margin = bst.predict(dimportance, output_margin=True)
+        dimportance.set_base_margin(margin)
+    trans = margin2pred[param["objective"]]
+    predictions = trans(margin)
+
+    if dtrain is not None:
+        # reset the margin of dtrain and dimportance
+        dtrain.set_base_margin([])
+        dimportance.set_base_margin([])
+        # train a boosting forest with DTRAIN, which will be used to make prediction for dimportance
+        bst = xgb.train(param, dtrain, num_boost_round, verbose_eval=False)
+        # calculate baseline prediction accuracy
+        margin_true = bst.predict(dimportance, output_margin=True)
+        if not np.allclose(margin_true, margin, rtol=1e-5, atol=1e-5):
+            print("Oops", np.mean(margin - margin_true))
+
     if param["objective"] in ("reg:squarederror", "reg:linear"):
         baseline = mean_squared_error(dimportance.get_label(), predictions)
     else:

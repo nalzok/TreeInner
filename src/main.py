@@ -1,4 +1,5 @@
 from pathlib import Path
+from timeit import default_timer as timer
 
 import xgboost as xgb
 import numpy as np
@@ -30,7 +31,7 @@ def main(data_root, param, num_boost_rounds):
         for subproblem_id in (1, 2):
             print(f"Working on {subproblem}{subproblem_id}")
             subdirectory = data_root / f"{subproblem}{subproblem_id}"
-            for i in trange(40, leave=False):
+            for i in trange(2, leave=False):
                 experiment(
                     subdirectory,
                     param,
@@ -86,32 +87,39 @@ def experiment(
         }
 
         total_gain = None
-        for correlation in ("Covariance", "Pearson", "Spearman", "AbsoluteValue"):
+        for correlation in ("Covariance", "AbsoluteValue"):
             for oob in (False, True):
-                for algo in ("Saabas", "SHAP"):
-                    dimportance = dvalid if oob else dtrain
+                dimportance = dvalid if oob else dtrain
+                domain = "in" if oob else "out"
+                for algo in ("PreDecomp", "SHAP"):
+                    start = timer()
                     score = feature_importance(
-                        dimportance, boosters, num_boost_round, param, correlation, algo,
+                        dimportance, boosters, num_boost_round, param, correlation, algo, dtrain
                     )
-                    if correlation == "Covariance" and oob is False and algo == "Saabas":
+                    end = timer()
+                    if correlation == "Covariance" and oob is False and algo == "PreDecomp":
                         total_gain = score
 
-                    domain = "valid" if oob else "train"
                     oracle_auc_row.append(
                         {
-                            "method": f"{correlation}-{algo}-{domain}",
+                            "method": f"{correlation}-{domain}-{algo}",
                             "auc_noisy": roc_auc_score(signal, score),
+                            "elapsed": end - start,
                             **common,
                         }
                     )
+        assert total_gain is not None, "Remember to calculate total gain estimation"
 
+        start = timer()
         score = permutation_importance(
-            dtrain, X_valid, Y_valid, param, num_boost_round, 5
+            boosters, num_boost_round, X_valid, Y_valid, param, 5, dtrain
         )
+        end = timer()
         oracle_auc_row.append(
             {
                 "method": "Permutation",
                 "auc_noisy": roc_auc_score(signal, score),
+                "elapsed": end - start,
                 **common,
             }
         )
@@ -140,6 +148,19 @@ def visualize(results, param_str):
     )
     sns_plot.savefig(results / "plots" / f"oracle-auc+{param_str}.png")
 
+    oracle_auc["log10(elapsed)"] = np.log10(oracle_auc["elapsed"])
+    sns_plot = sns.catplot(
+        x="num_boost_round",
+        y="log10(elapsed)",
+        col="subproblem",
+        row="subproblem_id",
+        hue="method",
+        kind="box",
+        data=oracle_auc,
+        height=16,
+        aspect=2
+    )
+    sns_plot.savefig(results / "plots" / f"oracle-elapsed+{param_str}.png")
 
     mdi_error = pd.read_csv(results / "csv" / f"mdi-error+{param_str}.csv")
     mdi_error["log10(error)"] = np.log10(mdi_error["error"])
