@@ -1,9 +1,9 @@
-from typing import Dict, List, Optional
-from warnings import warn, catch_warnings, simplefilter
+from typing import Dict, List
+from warnings import catch_warnings, simplefilter
 
 import numpy as np
 import pandas as pd
-from scipy.special import logit, expit
+from scipy.special import expit
 from scipy.stats import pearsonr, spearmanr, ConstantInputWarning
 from sklearn.metrics import mean_squared_error, roc_auc_score
 import xgboost as xgb
@@ -47,7 +47,6 @@ def feature_importance(
     param: Dict,
     correlation: str,
     algo: str,
-    dtrain: Optional[xgb.DMatrix] = None,
 ) -> np.ndarray:
     # reset the margin of dimportance
     dimportance.set_base_margin([])
@@ -55,7 +54,11 @@ def feature_importance(
     # train a boosting forest with DTRAIN, use it to make prediction for dimportance,
     # and decompose the result into feature contributions
     contributions_by_tree = _compute_contribution(
-        dimportance, boosters, num_boost_round, param, algo, dtrain
+        dimportance,
+        boosters,
+        num_boost_round,
+        param,
+        algo,
     )
 
     # compute gradient
@@ -108,7 +111,6 @@ def _compute_contribution(
     num_boost_round: int,
     param: Dict,
     algo: str,
-    dtrain: Optional[xgb.DMatrix],
 ) -> np.ndarray:
     # reset the margin of dimportance
     dimportance.set_base_margin([])
@@ -148,28 +150,6 @@ def _compute_contribution(
         # set the margin to incorporate all the previous trees' prediction
         dimportance.set_base_margin(base_margin)
 
-    if dtrain is not None:
-        # checks if $f_{m,k}$ and the bias add up to the prediction of trees
-        arg1 = np.sum(contributions_by_tree, axis=(0, 2))
-        arg2 = np.sum(pvalid_tree, axis=1)
-        if not np.allclose(arg1, arg2, rtol=1e-5, atol=1e-5):
-            warn(
-                f"  Contributions should sum to prediction: error = {max(abs(arg1 - arg2))}, when param = {param} and num_boost_round = {num_boost_round}."
-            )
-
-        # checks if training individual trees from staged predictions is the same as training the entire tree ensemble as a whole,
-        # a.k.a. checks if boosting from prediction is done right.
-        dtrain.set_base_margin([])  # reset base margin
-        dimportance.set_base_margin([])  # reset base margin
-        bst_all_in_one = xgb.train(param, dtrain, num_boost_round, verbose_eval=False)
-        pvalid_all_in_one = bst_all_in_one.predict(dimportance, output_margin=True)
-        arg1 = np.sum(contributions_by_tree, axis=(0, 2))
-        arg2 = pvalid_all_in_one
-        if not np.allclose(arg1, arg2, rtol=1e-5, atol=1e-5):
-            warn(
-                f"  Predictions should be close: error = {max(abs(arg1 - arg2))}, when param = {param} and num_boost_round = {num_boost_round}."
-            )
-
     return contributions_by_tree
 
 
@@ -203,7 +183,6 @@ def permutation_importance(
     Y_valid: pd.DataFrame,
     param: Dict,
     perm_round: int,
-    dtrain: Optional[xgb.DMatrix] = None,
 ) -> np.ndarray:
     # build DMatrix from data frames
     dimportance = xgb.DMatrix(X_valid, Y_valid, silent=True)
@@ -216,17 +195,6 @@ def permutation_importance(
     trans = margin2pred[param["objective"]]
     predictions = trans(margin)
 
-    if dtrain is not None:
-        # reset the margin of dtrain and dimportance
-        dtrain.set_base_margin([])
-        dimportance.set_base_margin([])
-        # train a boosting forest with DTRAIN, which will be used to make prediction for dimportance
-        bst = xgb.train(param, dtrain, num_boost_round, verbose_eval=False)
-        # calculate baseline prediction accuracy
-        margin_true = bst.predict(dimportance, output_margin=True)
-        if not np.allclose(margin_true, margin, rtol=1e-5, atol=1e-5):
-            print("Oops", np.mean(margin - margin_true))
-
     if param["objective"] in ("reg:squarederror", "reg:linear"):
         baseline = mean_squared_error(dimportance.get_label(), predictions)
     else:
@@ -234,15 +202,21 @@ def permutation_importance(
 
     importances = np.zeros((len(X_valid.columns),), dtype=np.float32)
     for idx, feature in enumerate(X_valid.columns):
-        # permute row and re-calculate prediction accuracy
         loss_sum = 0
         for _ in range(perm_round):
+            # permute row and re-calculate prediction accuracy
             save = X_valid[feature].copy()
             X_valid[feature] = np.random.permutation(X_valid[feature])
             dimportance = xgb.DMatrix(X_valid, Y_valid, silent=True)
             X_valid[feature] = save
 
-            predictions = bst.predict(dimportance)
+            margin = np.full(dimportance.num_row(), param["base_score"])
+            for bst in boosters[:num_boost_round]:
+                margin = bst.predict(dimportance, output_margin=True)
+                dimportance.set_base_margin(margin)
+            trans = margin2pred[param["objective"]]
+            predictions = trans(margin)
+
             if param["objective"] in ("reg:squarederror", "reg:linear"):
                 loss_sum += mean_squared_error(dimportance.get_label(), predictions)
             else:
@@ -263,7 +237,7 @@ def validate_total_gain(
     total_gain_dict = bst_all_in_one.get_score(importance_type="total_gain")
     total_gain = np.array(
         [total_gain_dict.get(f, 0) for f in bst_all_in_one.feature_names]
-    ).astype('float64')
+    ).astype("float64")
 
     total_gain /= np.sum(total_gain)
     candidate /= np.sum(candidate)

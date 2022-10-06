@@ -94,10 +94,14 @@ def experiment(
                 for algo in ("PreDecomp", "SHAP"):
                     start = timer()
                     score = feature_importance(
-                        dimportance, boosters, num_boost_round, param, correlation, algo, dtrain
+                        dimportance, boosters, num_boost_round, param, correlation, algo
                     )
                     end = timer()
-                    if correlation == "Covariance" and oob is False and algo == "PreDecomp":
+                    if (
+                        correlation == "Covariance"
+                        and oob is False
+                        and algo == "PreDecomp"
+                    ):
                         total_gain = score
 
                     oracle_auc_row.append(
@@ -112,7 +116,7 @@ def experiment(
 
         start = timer()
         score = permutation_importance(
-            boosters, num_boost_round, X_valid, Y_valid, param, 5, dtrain
+            boosters, num_boost_round, X_valid, Y_valid, param, 5
         )
         end = timer()
         oracle_auc_row.append(
@@ -144,7 +148,7 @@ def visualize(results, param_str):
         kind="box",
         data=oracle_auc,
         height=16,
-        aspect=2
+        aspect=2,
     )
     sns_plot.savefig(results / "plots" / f"oracle-auc+{param_str}.png")
 
@@ -158,7 +162,7 @@ def visualize(results, param_str):
         kind="box",
         data=oracle_auc,
         height=16,
-        aspect=2
+        aspect=2,
     )
     sns_plot.savefig(results / "plots" / f"oracle-elapsed+{param_str}.png")
 
@@ -193,6 +197,6 @@ if __name__ == "__main__":
         "reg_lambda": 1,
     }
 
-    num_boost_rounds = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
+    num_boost_rounds = (150, 300, 450)
 
     main(data_root, param, num_boost_rounds)
