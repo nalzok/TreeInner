@@ -16,7 +16,7 @@ from .importance import (
 
 
 def main(data_root, param, num_boost_rounds):
-    for name in ["max_depth", "eta", "base_score", "reg_lambda"]:
+    for name in ["max_depth", "eta", "reg_lambda"]:
         assert name in param, "{} should be in param.".format(name)
 
     param_str = "+".join(k + "=" + str(v) for k, v in param.items()).replace(".", "p")
@@ -28,16 +28,18 @@ def main(data_root, param, num_boost_rounds):
         param["objective"] = (
             "binary:logistic" if subproblem == "classification" else "reg:squarederror"
         )
-        for subproblem_id in (1, 2):
-            print(f"Working on {subproblem}{subproblem_id}")
-            subdirectory = data_root / f"{subproblem}{subproblem_id}"
+        param["base_score"] = 0.5 if subproblem == "classification" else 0.0
+
+        for dataset_id in (1, 2):
+            print(f"Working on {subproblem}{dataset_id}")
+            subdirectory = data_root / f"{subproblem}{dataset_id}"
             for i in trange(40, leave=False):
                 experiment(
                     subdirectory,
                     param,
                     num_boost_rounds,
                     subproblem,
-                    subproblem_id,
+                    dataset_id,
                     i,
                     oracle_auc_row,
                     mdi_error_row,
@@ -61,7 +63,7 @@ def experiment(
     param,
     num_boost_rounds,
     subproblem,
-    subproblem_id,
+    dataset_id,
     i,
     oracle_auc_row,
     mdi_error_row,
@@ -72,6 +74,10 @@ def experiment(
     Y_valid = pd.read_csv(subdirectory / f"permuted{i}_y_test.csv", header=None)
     noisy = pd.read_csv(subdirectory / f"permuted{i}_noisy_features.csv", header=None)
 
+    if subproblem == "regression":
+        Y_train[0] -= Y_train[0].mean()
+        Y_valid[0] -= Y_valid[0].mean()
+
     signal = -noisy.round(0).astype(int)
     # build DMatrix from data frames
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
@@ -81,13 +87,27 @@ def experiment(
     for num_boost_round in tqdm(num_boost_rounds, leave=False):
         common = {
             "subproblem": subproblem,
-            "subproblem_id": subproblem_id,
+            "dataset_id": dataset_id,
             "dataset_id": i,
             "num_boost_round": num_boost_round,
         }
 
+        start = timer()
+        score = permutation_importance(
+            boosters, num_boost_round, X_valid, Y_valid, param, 5
+        )
+        end = timer()
+        oracle_auc_row.append(
+            {
+                "method": "Permutation",
+                "auc_noisy": roc_auc_score(signal, score),
+                "elapsed": end - start,
+                **common,
+            }
+        )
+
         total_gain = None
-        for correlation in ("Covariance", "AbsoluteValue"):
+        for correlation in ("AbsoluteValue", "Covariance"):
             for oob in (False, True):
                 dimportance = dvalid if oob else dtrain
                 domain = "in" if oob else "out"
@@ -114,20 +134,6 @@ def experiment(
                     )
         assert total_gain is not None, "Remember to calculate total gain estimation"
 
-        start = timer()
-        score = permutation_importance(
-            boosters, num_boost_round, X_valid, Y_valid, param, 5
-        )
-        end = timer()
-        oracle_auc_row.append(
-            {
-                "method": "Permutation",
-                "auc_noisy": roc_auc_score(signal, score),
-                "elapsed": end - start,
-                **common,
-            }
-        )
-
         error = validate_total_gain(total_gain, dtrain, param, num_boost_round)
         mdi_error_row.append(
             {
@@ -143,7 +149,7 @@ def visualize(results, param_str):
         x="num_boost_round",
         y="auc_noisy",
         col="subproblem",
-        row="subproblem_id",
+        row="dataset_id",
         hue="method",
         kind="box",
         data=oracle_auc,
@@ -157,7 +163,7 @@ def visualize(results, param_str):
         x="num_boost_round",
         y="log10(elapsed)",
         col="subproblem",
-        row="subproblem_id",
+        row="dataset_id",
         hue="method",
         kind="box",
         data=oracle_auc,
@@ -172,7 +178,7 @@ def visualize(results, param_str):
         x="num_boost_round",
         y="log10(error)",
         col="subproblem",
-        row="subproblem_id",
+        row="dataset_id",
         kind="box",
         palette=sns.color_palette("Blues", n_colors=len(num_boost_rounds)),
         data=mdi_error,
@@ -193,7 +199,6 @@ if __name__ == "__main__":
     param = {
         "max_depth": 5,
         "eta": 0.1,
-        "base_score": 0.5,
         "reg_lambda": 1,
     }
 
