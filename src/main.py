@@ -15,7 +15,7 @@ from .importance import (
 )
 
 
-def main(data_root, num_boost_round, param, min_child_weight_list):
+def main(data_root, num_boost_round, param, max_depth_list):
     for name in ["eta", "reg_lambda"]:
         assert name in param, "{} should be in param.".format(name)
 
@@ -38,7 +38,7 @@ def main(data_root, num_boost_round, param, min_child_weight_list):
                     subdirectory,
                     num_boost_round,
                     param,
-                    min_child_weight_list,
+                    max_depth_list,
                     subproblem,
                     subproblem_id,
                     dataset_id,
@@ -63,7 +63,7 @@ def experiment(
     subdirectory,
     num_boost_round,
     param,
-    min_child_weight_list,
+    max_depth_list,
     subproblem,
     subproblem_id,
     dataset_id,
@@ -91,15 +91,15 @@ def experiment(
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
     dvalid = xgb.DMatrix(X_valid, Y_valid, silent=True)
 
-    for min_child_weight in tqdm(min_child_weight_list, leave=False):
-        param["min_child_weight"] = min_child_weight
+    for max_depth in tqdm(max_depth_list, leave=False):
+        param["max_depth"] = max_depth
         boosters = train_boosters(dtrain, num_boost_round, param)
 
         common = {
             "subproblem": subproblem,
             "subproblem_id": subproblem_id,
             "dataset_id": dataset_id,
-            "min_child_weight": min_child_weight,
+            "max_depth": max_depth,
         }
 
         # score = permutation_importance(
@@ -163,7 +163,7 @@ def experiment(
 def visualize(results, param_str):
     oracle_auc = pd.read_csv(results / "csv" / f"oracle-auc+{param_str}.csv")
     sns_plot = sns.catplot(
-        x="min_child_weight",
+        x="max_depth",
         y="auc_noisy",
         col="subproblem",
         row="subproblem_id",
@@ -178,7 +178,7 @@ def visualize(results, param_str):
     mdi_error = pd.read_csv(results / "csv" / f"mdi-error+{param_str}.csv")
     mdi_error["log10(error)"] = np.log10(mdi_error["error"])
     sns_plot = sns.catplot(
-        x="min_child_weight",
+        x="max_depth",
         y="log10(error)",
         col="subproblem",
         row="subproblem_id",
@@ -201,6 +201,6 @@ if __name__ == "__main__":
         "eta": 0.1,
         "reg_lambda": 1,
     }
-    min_child_weight_list = (1, 100)
+    max_depth_list = (2, 4, 6, 8)
 
-    main(data_root, num_boost_round, param, min_child_weight_list)
+    main(data_root, num_boost_round, param, max_depth_list)
