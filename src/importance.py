@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -38,56 +38,13 @@ def train_boosters(
     return boosters
 
 
-def feature_importance(
-    dimportance: xgb.DMatrix,
-    boosters: List[xgb.Booster],
-    num_boost_round: int,
-    param: Dict,
-    gfa: str,
-    ifa: str,
-) -> np.ndarray:
-    # reset the margin of dimportance
-    dimportance.set_base_margin([])
-
-    # train a boosting forest with DTRAIN, use it to make prediction for dimportance,
-    # and decompose the result into feature contributions
-    contributions_by_tree = _compute_contribution(
-        dimportance,
-        boosters,
-        num_boost_round,
-        param,
-        ifa,
-    )
-
-    # compute gradient
-    gradient_by_tree = _compute_gradient(
-        contributions_by_tree,
-        dimportance,
-        param["objective"],
-        param["base_score"],
-        num_boost_round,
-    )
-    gradient_by_tree = gradient_by_tree[:, :, np.newaxis]
-
-    if gfa == "Inner":
-        MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
-        MDI = MDI[:-1] / param["eta"]
-    elif gfa == "Abs":
-        # ignore the per-tree bias
-        MDI = np.sum(np.abs(contributions_by_tree[:, :, :-1]), axis=(0, 1))
-    else:
-        raise ValueError(f"Unknown GFA {gfa}")
-
-    return MDI
-
-
-def _compute_contribution(
+def compute_contribution_gradient(
     dimportance: xgb.DMatrix,
     boosters: List[xgb.Booster],
     num_boost_round: int,
     param: Dict,
     ifa: str,
-) -> np.ndarray:
+) -> Tuple[np.ndarray, np.ndarray]:
     # reset the margin of dimportance
     dimportance.set_base_margin([])
 
@@ -98,58 +55,63 @@ def _compute_contribution(
     )
     base_margin = np.zeros(dimportance.num_row())
 
+    # store the (negative) gradient for each tree
+    gradient_by_tree = np.zeros(
+        (num_boost_round, dimportance.num_row()), dtype=np.float32
+    )
+    gradient_by_tree[0, :] = dimportance.get_label() - param["base_score"]
+
     for t, bst in enumerate(boosters[:num_boost_round]):
         # compute the contribution_by_tree
         if ifa == "PreDecomp":
-            pvalid_tree = bst.predict(
+            pimportance_tree = bst.predict(
                 dimportance,
                 pred_contribs=True,
                 approx_contribs=True,
                 reg_lambda=param["reg_lambda"],
             )
         elif ifa == "ApproxSHAP":
-            pvalid_tree = bst.predict(
+            pimportance_tree = bst.predict(
                 dimportance,
                 pred_contribs=True,
                 approx_contribs=True,
                 reg_lambda=0,
             )
         elif ifa == "SHAP":
-            pvalid_tree = bst.predict(dimportance, pred_contribs=True)
+            pimportance_tree = bst.predict(dimportance, pred_contribs=True)
         else:
             raise ValueError(f"Unknown IFA {ifa}")
 
-        contributions_by_tree[t, :, :-1] = pvalid_tree[:, :-1]
-        contributions_by_tree[t, :, -1] = pvalid_tree[:, -1] - base_margin
-        base_margin = np.sum(pvalid_tree, axis=-1)
+        contributions_by_tree[t, :, :-1] = pimportance_tree[:, :-1]
+        contributions_by_tree[t, :, -1] = pimportance_tree[:, -1] - base_margin
+        base_margin = np.sum(pimportance_tree, axis=-1)
+
+        trans = margin2pred[param["objective"]]
+        gradient_by_tree[t, :] = dimportance.get_label() - trans(base_margin)
 
         # set the margin to incorporate all the previous trees' prediction
         dimportance.set_base_margin(base_margin)
 
-    return contributions_by_tree
+    return contributions_by_tree, gradient_by_tree
 
 
-def _compute_gradient(
+def feature_importance(
     contributions_by_tree: np.ndarray,
-    dimportance: xgb.DMatrix,
-    objective: str,
-    base_score: float,
-    num_boost_round: int,
+    gradient_by_tree: np.ndarray,
+    param: Dict,
+    gfa: str,
 ) -> np.ndarray:
-    # compute (negative) gradient for each tree
-    gradient_by_tree = np.zeros(
-        (num_boost_round, dimportance.num_row()), dtype=np.float32
-    )
-    gradient_by_tree[0, :] = dimportance.get_label() - base_score
+    if gfa == "Inner":
+        gradient_by_tree = gradient_by_tree[:, :, np.newaxis]
+        MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
+        MDI = MDI[:-1] / param["eta"]
+    elif gfa == "Abs":
+        # ignore the per-tree bias
+        MDI = np.sum(np.abs(contributions_by_tree[:, :, :-1]), axis=(0, 1))
+    else:
+        raise ValueError(f"Unknown GFA {gfa}")
 
-    # TODO: is this correct for classification?
-    trans = margin2pred[objective]
-    for t in range(1, num_boost_round):
-        gradient_by_tree[t, :] = dimportance.get_label() - trans(
-            np.sum(contributions_by_tree[:t, :, :], axis=(0, 2))
-        )
-
-    return gradient_by_tree
+    return MDI
 
 
 def permutation_importance(
@@ -172,9 +134,9 @@ def permutation_importance(
     predictions = trans(margin)
 
     if param["objective"] in ("reg:squarederror", "reg:linear"):
-        baseline = mean_squared_error(dimportance.get_label(), predictions)
+        baseline = -mean_squared_error(dimportance.get_label(), predictions)
     else:
-        baseline = 1 - roc_auc_score(dimportance.get_label(), predictions)
+        baseline = roc_auc_score(dimportance.get_label(), predictions)
 
     importances = np.zeros((len(X_valid.columns),), dtype=np.float32)
     for idx, feature in enumerate(X_valid.columns):
@@ -194,9 +156,9 @@ def permutation_importance(
             predictions = trans(margin)
 
             if param["objective"] in ("reg:squarederror", "reg:linear"):
-                loss_sum += mean_squared_error(dimportance.get_label(), predictions)
+                loss_sum += -mean_squared_error(dimportance.get_label(), predictions)
             else:
-                loss_sum += 1 - roc_auc_score(dimportance.get_label(), predictions)
+                loss_sum += roc_auc_score(dimportance.get_label(), predictions)
 
         importances[idx] = baseline - loss_sum / perm_round
 

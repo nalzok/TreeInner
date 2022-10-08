@@ -1,5 +1,4 @@
 from pathlib import Path
-from timeit import default_timer as timer
 
 import xgboost as xgb
 import numpy as np
@@ -9,6 +8,7 @@ from sklearn.metrics import roc_auc_score
 import seaborn as sns
 from .importance import (
     train_boosters,
+    compute_contribution_gradient,
     feature_importance,
     permutation_importance,
     validate_total_gain,
@@ -102,44 +102,54 @@ def experiment(
             "num_boost_round": num_boost_round,
         }
 
-        start = timer()
         score = permutation_importance(
             boosters, num_boost_round, X_valid, Y_valid, param, 5
         )
-        end = timer()
         oracle_auc_row.append(
             {
                 "method": "Permutation",
                 "auc_noisy": roc_auc_score(signal, score),
-                "elapsed": end - start,
                 **common,
             }
         )
 
+        use_valid_list = (False, True)
+        ifa_list = ("PreDecomp", "SHAP")
+        gfa_list = ("Abs", "Inner")
+        result = {}
+
         total_gain = None
-        for gfa in ("Abs", "Inner"):
-            for ifa in ("PreDecomp", "SHAP"):
-                for oob in (False, True):
-                    dimportance = dvalid if oob else dtrain
-                    domain = "in" if oob else "out"
-
-                    start = timer()
+        for use_valid in use_valid_list:
+            dimportance = dvalid if use_valid else dtrain
+            for ifa in ifa_list:
+                contributions, gradient = compute_contribution_gradient(
+                    dimportance, boosters, num_boost_round, param, ifa
+                )
+                for gfa in gfa_list:
                     score = feature_importance(
-                        dimportance, boosters, num_boost_round, param, gfa, ifa
+                        contributions,
+                        gradient,
+                        param,
+                        gfa,
                     )
-                    end = timer()
-                    if gfa == "Inner" and ifa == "PreDecomp" and oob is False:
+                    if use_valid is False and ifa == "PreDecomp" and gfa == "Inner":
                         total_gain = score
+                    result[(use_valid, ifa, gfa)] = score
+        assert total_gain is not None, "Remember to calculate total gain estimation"
 
+        # reorder experiment results
+        for gfa in gfa_list:
+            for ifa in ifa_list:
+                for use_valid in use_valid_list:
+                    domain = "in" if use_valid else "out"
+                    score = result[(use_valid, ifa, gfa)]
                     oracle_auc_row.append(
                         {
                             "method": f"{gfa}-{ifa}-{domain}",
                             "auc_noisy": roc_auc_score(signal, score),
-                            "elapsed": end - start,
                             **common,
                         }
                     )
-        assert total_gain is not None, "Remember to calculate total gain estimation"
 
         error = validate_total_gain(total_gain, dtrain, param, num_boost_round)
         mdi_error_row.append(
@@ -164,20 +174,6 @@ def visualize(results, param_str):
         aspect=2,
     )
     sns_plot.savefig(results / "plots" / f"oracle-auc+{param_str}.png")
-
-    oracle_auc["log10(elapsed)"] = np.log10(oracle_auc["elapsed"])
-    sns_plot = sns.catplot(
-        x="num_boost_round",
-        y="log10(elapsed)",
-        col="subproblem",
-        row="subproblem_id",
-        hue="method",
-        kind="box",
-        data=oracle_auc,
-        height=16,
-        aspect=2,
-    )
-    sns_plot.savefig(results / "plots" / f"oracle-elapsed+{param_str}.png")
 
     mdi_error = pd.read_csv(results / "csv" / f"mdi-error+{param_str}.csv")
     mdi_error["log10(error)"] = np.log10(mdi_error["error"])
