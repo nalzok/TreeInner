@@ -84,10 +84,6 @@ def experiment(
         subdirectory / f"permuted{dataset_id}_noisy_features.csv", header=None
     )
 
-    if subproblem == "regression":
-        Y_train[0] -= Y_train[0].mean()
-        Y_valid[0] -= Y_valid[0].mean()
-
     signal = -noisy.round(0).astype(int)
     # build DMatrix from data frames
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
