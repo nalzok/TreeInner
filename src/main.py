@@ -68,11 +68,21 @@ def experiment(
     oracle_auc_row,
     mdi_error_row,
 ):
-    X_train = pd.read_csv(subdirectory / f"permuted{dataset_id}_X_train.csv", header=None)
-    Y_train = pd.read_csv(subdirectory / f"permuted{dataset_id}_y_train.csv", header=None)
-    X_valid = pd.read_csv(subdirectory / f"permuted{dataset_id}_X_test.csv", header=None)
-    Y_valid = pd.read_csv(subdirectory / f"permuted{dataset_id}_y_test.csv", header=None)
-    noisy = pd.read_csv(subdirectory / f"permuted{dataset_id}_noisy_features.csv", header=None)
+    X_train = pd.read_csv(
+        subdirectory / f"permuted{dataset_id}_X_train.csv", header=None
+    )
+    Y_train = pd.read_csv(
+        subdirectory / f"permuted{dataset_id}_y_train.csv", header=None
+    )
+    X_valid = pd.read_csv(
+        subdirectory / f"permuted{dataset_id}_X_test.csv", header=None
+    )
+    Y_valid = pd.read_csv(
+        subdirectory / f"permuted{dataset_id}_y_test.csv", header=None
+    )
+    noisy = pd.read_csv(
+        subdirectory / f"permuted{dataset_id}_noisy_features.csv", header=None
+    )
 
     if subproblem == "regression":
         Y_train[0] -= Y_train[0].mean()
@@ -117,11 +127,7 @@ def experiment(
                         dimportance, boosters, num_boost_round, param, correlation, algo
                     )
                     end = timer()
-                    if (
-                        correlation == "Inner"
-                        and oob is False
-                        and algo == "PreDecomp"
-                    ):
+                    if correlation == "Inner" and oob is False and algo == "PreDecomp":
                         total_gain = score
 
                     oracle_auc_row.append(
