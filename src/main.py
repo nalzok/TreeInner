@@ -107,7 +107,7 @@ def experiment(
         )
 
         total_gain = None
-        for correlation in ("AbsoluteValue", "Covariance"):
+        for correlation in ("Abs", "Inner"):
             for oob in (False, True):
                 dimportance = dvalid if oob else dtrain
                 domain = "in" if oob else "out"
@@ -118,7 +118,7 @@ def experiment(
                     )
                     end = timer()
                     if (
-                        correlation == "Covariance"
+                        correlation == "Inner"
                         and oob is False
                         and algo == "PreDecomp"
                     ):

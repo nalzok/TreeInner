@@ -1,10 +1,8 @@
 from typing import Dict, List
-from warnings import catch_warnings, simplefilter
 
 import numpy as np
 import pandas as pd
 from scipy.special import expit
-from scipy.stats import pearsonr, spearmanr, ConstantInputWarning
 from sklearn.metrics import mean_squared_error, roc_auc_score
 import xgboost as xgb
 
@@ -45,8 +43,8 @@ def feature_importance(
     boosters: List[xgb.Booster],
     num_boost_round: int,
     param: Dict,
-    correlation: str,
-    algo: str,
+    gfa: str,
+    ifa: str,
 ) -> np.ndarray:
     # reset the margin of dimportance
     dimportance.set_base_margin([])
@@ -58,7 +56,7 @@ def feature_importance(
         boosters,
         num_boost_round,
         param,
-        algo,
+        ifa,
     )
 
     # compute gradient
@@ -71,36 +69,14 @@ def feature_importance(
     )
     gradient_by_tree = gradient_by_tree[:, :, np.newaxis]
 
-    if correlation == "Covariance":
+    if gfa == "Inner":
         MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
         MDI = MDI[:-1] / param["eta"]
-    elif correlation == "Pearson":
-        MDI = np.zeros(contributions_by_tree.shape[-1] - 1)
-        with catch_warnings():
-            simplefilter("ignore", ConstantInputWarning)
-            for k in range(MDI.size):
-                for t in range(gradient_by_tree.shape[0]):
-                    y_true = gradient_by_tree[t, :, 0]
-                    y_score = contributions_by_tree[t, :, k]
-                    corr = pearsonr(y_true, y_score)
-                    if not np.isnan(corr.statistic):
-                        MDI[k] += corr.statistic
-    elif correlation == "Spearman":
-        MDI = np.zeros(contributions_by_tree.shape[-1] - 1)
-        with catch_warnings():
-            simplefilter("ignore", ConstantInputWarning)
-            for k in range(MDI.size):
-                for t in range(gradient_by_tree.shape[0]):
-                    y_true = gradient_by_tree[t, :, 0]
-                    y_score = contributions_by_tree[t, :, k]
-                    corr = spearmanr(y_true, y_score)
-                    if not np.isnan(corr.correlation):
-                        MDI[k] += corr.correlation
-    elif correlation == "AbsoluteValue":
+    elif gfa == "Abs":
         # ignore the per-tree bias
         MDI = np.sum(np.abs(contributions_by_tree[:, :, :-1]), axis=(0, 1))
     else:
-        raise ValueError(f"Unknown correlation metric {correlation}")
+        raise ValueError(f"Unknown GFA {gfa}")
 
     return MDI
 
@@ -110,7 +86,7 @@ def _compute_contribution(
     boosters: List[xgb.Booster],
     num_boost_round: int,
     param: Dict,
-    algo: str,
+    ifa: str,
 ) -> np.ndarray:
     # reset the margin of dimportance
     dimportance.set_base_margin([])
@@ -124,24 +100,24 @@ def _compute_contribution(
 
     for t, bst in enumerate(boosters[:num_boost_round]):
         # compute the contribution_by_tree
-        if algo == "PreDecomp":
+        if ifa == "PreDecomp":
             pvalid_tree = bst.predict(
                 dimportance,
                 pred_contribs=True,
                 approx_contribs=True,
                 reg_lambda=param["reg_lambda"],
             )
-        elif algo == "ApproxSHAP":
+        elif ifa == "ApproxSHAP":
             pvalid_tree = bst.predict(
                 dimportance,
                 pred_contribs=True,
                 approx_contribs=True,
                 reg_lambda=0,
             )
-        elif algo == "SHAP":
+        elif ifa == "SHAP":
             pvalid_tree = bst.predict(dimportance, pred_contribs=True)
         else:
-            raise ValueError(f"Unknown algorithm {algo}")
+            raise ValueError(f"Unknown IFA {ifa}")
 
         contributions_by_tree[t, :, :-1] = pvalid_tree[:, :-1]
         contributions_by_tree[t, :, -1] = pvalid_tree[:, -1] - base_margin
