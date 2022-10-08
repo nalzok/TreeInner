@@ -189,9 +189,7 @@ def visualize(results, param_str):
 
 
 if __name__ == "__main__":
-    assert (
-        xgb.__version__ == "1.6.2-dev"
-    ), "A custom fork of XGBoost is required."
+    assert xgb.__version__ == "1.6.2-dev", "A custom fork of XGBoost is required."
 
     np.random.seed(42)
     sns.set_theme(style="whitegrid", rc={"savefig.dpi": 300})
