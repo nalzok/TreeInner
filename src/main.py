@@ -15,8 +15,8 @@ from .importance import (
 )
 
 
-def main(data_root, param, num_boost_rounds):
-    for name in ["max_depth", "eta", "reg_lambda"]:
+def main(data_root, num_boost_round, param, min_child_weight_list):
+    for name in ["eta", "reg_lambda"]:
         assert name in param, "{} should be in param.".format(name)
 
     param_str = "+".join(k + "=" + str(v) for k, v in param.items()).replace(".", "p")
@@ -36,8 +36,9 @@ def main(data_root, param, num_boost_rounds):
             for dataset_id in trange(40, leave=False):
                 experiment(
                     subdirectory,
+                    num_boost_round,
                     param,
-                    num_boost_rounds,
+                    min_child_weight_list,
                     subproblem,
                     subproblem_id,
                     dataset_id,
@@ -60,8 +61,9 @@ def main(data_root, param, num_boost_rounds):
 
 def experiment(
     subdirectory,
+    num_boost_round,
     param,
-    num_boost_rounds,
+    min_child_weight_list,
     subproblem,
     subproblem_id,
     dataset_id,
@@ -89,13 +91,15 @@ def experiment(
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
     dvalid = xgb.DMatrix(X_valid, Y_valid, silent=True)
 
-    boosters = train_boosters(dtrain, max(num_boost_rounds), param)
-    for num_boost_round in tqdm(num_boost_rounds, leave=False):
+    for min_child_weight in tqdm(min_child_weight_list, leave=False):
+        param["min_child_weight"] = min_child_weight
+        boosters = train_boosters(dtrain, num_boost_round, param)
+
         common = {
             "subproblem": subproblem,
             "subproblem_id": subproblem_id,
             "dataset_id": dataset_id,
-            "num_boost_round": num_boost_round,
+            "min_child_weight": min_child_weight,
         }
 
         # score = permutation_importance(
@@ -147,7 +151,7 @@ def experiment(
                         }
                     )
 
-        error = validate_total_gain(total_gain, dtrain, param, num_boost_round)
+        error = validate_total_gain(total_gain, dtrain, num_boost_round, param)
         mdi_error_row.append(
             {
                 "error": error,
@@ -159,7 +163,7 @@ def experiment(
 def visualize(results, param_str):
     oracle_auc = pd.read_csv(results / "csv" / f"oracle-auc+{param_str}.csv")
     sns_plot = sns.catplot(
-        x="num_boost_round",
+        x="min_child_weight",
         y="auc_noisy",
         col="subproblem",
         row="subproblem_id",
@@ -174,12 +178,11 @@ def visualize(results, param_str):
     mdi_error = pd.read_csv(results / "csv" / f"mdi-error+{param_str}.csv")
     mdi_error["log10(error)"] = np.log10(mdi_error["error"])
     sns_plot = sns.catplot(
-        x="num_boost_round",
+        x="min_child_weight",
         y="log10(error)",
         col="subproblem",
         row="subproblem_id",
         kind="box",
-        palette=sns.color_palette("Blues", n_colors=len(num_boost_rounds)),
         data=mdi_error,
     )
     sns_plot.savefig(results / "plots" / f"mdi-error+{param_str}.png")
@@ -195,12 +198,11 @@ if __name__ == "__main__":
 
     data_root = Path("04_aggregate")
 
+    num_boost_round = 500
     param = {
-        "max_depth": 6,
         "eta": 0.1,
         "reg_lambda": 1,
     }
+    min_child_weight_list = (1, 100)
 
-    num_boost_rounds = (250, 500, 1000)
-
-    main(data_root, param, num_boost_rounds)
+    main(data_root, num_boost_round, param, min_child_weight_list)

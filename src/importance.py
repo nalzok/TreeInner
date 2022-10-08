@@ -166,7 +166,7 @@ def permutation_importance(
 
 
 def validate_total_gain(
-    candidate: np.ndarray, dtrain: xgb.DMatrix, param: Dict, num_boost_round: int
+    candidate: np.ndarray, dtrain: xgb.DMatrix, num_boost_round: int, param: Dict
 ) -> float:
     dtrain.set_base_margin([])
 
