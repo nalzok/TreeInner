@@ -30,17 +30,17 @@ def main(data_root, param, num_boost_rounds):
         )
         param["base_score"] = 0.5 if subproblem == "classification" else 0.0
 
-        for dataset_id in (1, 2):
-            print(f"Working on {subproblem}{dataset_id}")
-            subdirectory = data_root / f"{subproblem}{dataset_id}"
-            for i in trange(40, leave=False):
+        for subproblem_id in (1, 2):
+            print(f"Working on {subproblem}{subproblem_id}")
+            subdirectory = data_root / f"{subproblem}{subproblem_id}"
+            for dataset_id in trange(40, leave=False):
                 experiment(
                     subdirectory,
                     param,
                     num_boost_rounds,
                     subproblem,
+                    subproblem_id,
                     dataset_id,
-                    i,
                     oracle_auc_row,
                     mdi_error_row,
                 )
@@ -63,16 +63,16 @@ def experiment(
     param,
     num_boost_rounds,
     subproblem,
+    subproblem_id,
     dataset_id,
-    i,
     oracle_auc_row,
     mdi_error_row,
 ):
-    X_train = pd.read_csv(subdirectory / f"permuted{i}_X_train.csv", header=None)
-    Y_train = pd.read_csv(subdirectory / f"permuted{i}_y_train.csv", header=None)
-    X_valid = pd.read_csv(subdirectory / f"permuted{i}_X_test.csv", header=None)
-    Y_valid = pd.read_csv(subdirectory / f"permuted{i}_y_test.csv", header=None)
-    noisy = pd.read_csv(subdirectory / f"permuted{i}_noisy_features.csv", header=None)
+    X_train = pd.read_csv(subdirectory / f"permuted{dataset_id}_X_train.csv", header=None)
+    Y_train = pd.read_csv(subdirectory / f"permuted{dataset_id}_y_train.csv", header=None)
+    X_valid = pd.read_csv(subdirectory / f"permuted{dataset_id}_X_test.csv", header=None)
+    Y_valid = pd.read_csv(subdirectory / f"permuted{dataset_id}_y_test.csv", header=None)
+    noisy = pd.read_csv(subdirectory / f"permuted{dataset_id}_noisy_features.csv", header=None)
 
     if subproblem == "regression":
         Y_train[0] -= Y_train[0].mean()
@@ -87,8 +87,8 @@ def experiment(
     for num_boost_round in tqdm(num_boost_rounds, leave=False):
         common = {
             "subproblem": subproblem,
+            "subproblem_id": subproblem_id,
             "dataset_id": dataset_id,
-            "dataset_id": i,
             "num_boost_round": num_boost_round,
         }
 
@@ -149,7 +149,7 @@ def visualize(results, param_str):
         x="num_boost_round",
         y="auc_noisy",
         col="subproblem",
-        row="dataset_id",
+        row="subproblem_id",
         hue="method",
         kind="box",
         data=oracle_auc,
@@ -163,7 +163,7 @@ def visualize(results, param_str):
         x="num_boost_round",
         y="log10(elapsed)",
         col="subproblem",
-        row="dataset_id",
+        row="subproblem_id",
         hue="method",
         kind="box",
         data=oracle_auc,
@@ -178,7 +178,7 @@ def visualize(results, param_str):
         x="num_boost_round",
         y="log10(error)",
         col="subproblem",
-        row="dataset_id",
+        row="subproblem_id",
         kind="box",
         palette=sns.color_palette("Blues", n_colors=len(num_boost_rounds)),
         data=mdi_error,
@@ -202,6 +202,6 @@ if __name__ == "__main__":
         "reg_lambda": 1,
     }
 
-    num_boost_rounds = (150, 300, 450)
+    num_boost_rounds = (250, 500, 1000)
 
     main(data_root, param, num_boost_rounds)
