@@ -98,16 +98,16 @@ def experiment(
             "num_boost_round": num_boost_round,
         }
 
-        score = permutation_importance(
-            boosters, num_boost_round, X_valid, Y_valid, param, 5
-        )
-        oracle_auc_row.append(
-            {
-                "method": "Permutation",
-                "auc_noisy": roc_auc_score(signal, score),
-                **common,
-            }
-        )
+        # score = permutation_importance(
+        #     boosters, num_boost_round, X_valid, Y_valid, param, 5
+        # )
+        # oracle_auc_row.append(
+        #     {
+        #         "method": "Permutation",
+        #         "auc_noisy": roc_auc_score(signal, score),
+        #         **common,
+        #     }
+        # )
 
         use_valid_list = (False, True)
         ifa_list = ("PreDecomp", "SHAP")
@@ -188,7 +188,7 @@ def visualize(results, param_str):
 if __name__ == "__main__":
     assert (
         xgb.__version__ == "1.6.2-dev"
-    ), "A custom fork of XGBoost is required. See https://github.com/nalzok/xgboost/tree/release_1.6.0"
+    ), "A custom fork of XGBoost is required."
 
     np.random.seed(42)
     sns.set_theme(style="whitegrid", rc={"savefig.dpi": 300})

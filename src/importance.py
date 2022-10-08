@@ -53,7 +53,6 @@ def compute_contribution_gradient(
         (num_boost_round, dimportance.num_row(), dimportance.num_col() + 1),
         dtype=np.float32,
     )
-    base_margin = np.zeros(dimportance.num_row())
 
     # store the (negative) gradient for each tree
     gradient_by_tree = np.zeros(
@@ -61,6 +60,7 @@ def compute_contribution_gradient(
     )
     gradient_by_tree[0, :] = dimportance.get_label() - param["base_score"]
 
+    base_margin = np.full(dimportance.num_row(), param["base_score"])
     for t, bst in enumerate(boosters[:num_boost_round]):
         # compute the contribution_by_tree
         if ifa == "PreDecomp":
@@ -126,12 +126,12 @@ def permutation_importance(
     dimportance = xgb.DMatrix(X_valid, Y_valid, silent=True)
 
     # calculate baseline prediction accuracy
-    margin = np.full(dimportance.num_row(), param["base_score"])
+    base_margin = np.full(dimportance.num_row(), param["base_score"])
     for bst in boosters[:num_boost_round]:
-        margin = bst.predict(dimportance, output_margin=True)
-        dimportance.set_base_margin(margin)
+        base_margin = bst.predict(dimportance, output_margin=True)
+        dimportance.set_base_margin(base_margin)
     trans = margin2pred[param["objective"]]
-    predictions = trans(margin)
+    predictions = trans(base_margin)
 
     if param["objective"] in ("reg:squarederror", "reg:linear"):
         baseline = -mean_squared_error(dimportance.get_label(), predictions)
