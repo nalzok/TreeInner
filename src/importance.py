@@ -136,7 +136,7 @@ def _compute_gradient(
     base_score: float,
     num_boost_round: int,
 ) -> np.ndarray:
-    # compute gradient for each tree
+    # compute (negative) gradient for each tree
     gradient_by_tree = np.zeros(
         (num_boost_round, dimportance.num_row()), dtype=np.float32
     )

@@ -117,22 +117,23 @@ def experiment(
         )
 
         total_gain = None
-        for correlation in ("Abs", "Inner"):
-            for oob in (False, True):
-                dimportance = dvalid if oob else dtrain
-                domain = "in" if oob else "out"
-                for algo in ("PreDecomp", "SHAP"):
+        for gfa in ("Abs", "Inner"):
+            for ifa in ("PreDecomp", "SHAP"):
+                for oob in (False, True):
+                    dimportance = dvalid if oob else dtrain
+                    domain = "in" if oob else "out"
+
                     start = timer()
                     score = feature_importance(
-                        dimportance, boosters, num_boost_round, param, correlation, algo
+                        dimportance, boosters, num_boost_round, param, gfa, ifa
                     )
                     end = timer()
-                    if correlation == "Inner" and oob is False and algo == "PreDecomp":
+                    if gfa == "Inner" and ifa == "PreDecomp" and oob is False:
                         total_gain = score
 
                     oracle_auc_row.append(
                         {
-                            "method": f"{correlation}-{domain}-{algo}",
+                            "method": f"{gfa}-{ifa}-{domain}",
                             "auc_noisy": roc_auc_score(signal, score),
                             "elapsed": end - start,
                             **common,
@@ -203,7 +204,7 @@ if __name__ == "__main__":
     data_root = Path("04_aggregate")
 
     param = {
-        "max_depth": 5,
+        "max_depth": 6,
         "eta": 0.1,
         "reg_lambda": 1,
     }
