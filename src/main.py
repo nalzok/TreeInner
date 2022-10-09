@@ -30,16 +30,16 @@ def main(
     mdi_error_row = []
 
     for subproblem in ("classification", "regression"):
-        for subproblem_id in (1, 2):
-            print(f"Working on {subproblem}{subproblem_id}")
-            subdirectory = data_root / f"{subproblem}{subproblem_id}"
-            for dataset_id in trange(10, leave=False):
+        for distribution_id in (1, 2):
+            print(f"Working on {subproblem}{distribution_id}")
+            subdirectory = data_root / f"{subproblem}{distribution_id}"
+            for dataset_id in trange(20, leave=False):
                 experiment(
                     subdirectory,
                     grid.copy(),
                     agg_by,
                     subproblem,
-                    subproblem_id,
+                    distribution_id,
                     dataset_id,
                     oracle_auc_row,
                     mdi_error_row,
@@ -63,7 +63,7 @@ def experiment(
     grid: Dict[str, Tuple[Number, Sequence[Number]]],
     agg_by: str,
     subproblem: str,
-    subproblem_id: int,
+    distribution_id: int,
     dataset_id: int,
     oracle_auc_row: List,
     mdi_error_row: List,
@@ -110,9 +110,10 @@ def experiment(
         risk_train = evaluate_boosters(dtrain, boosters, num_boost_round, param)
         risk_valid = evaluate_boosters(dvalid, boosters, num_boost_round, param)
 
+        distribution = "ChIP" if distribution_id == 1 else "Simulated"
         common = {
+            "distribution": distribution,
             "subproblem": subproblem,
-            "subproblem_id": subproblem_id,
             "dataset_id": dataset_id,
             "risk_train": risk_train,
             "risk_valid": risk_valid,
@@ -133,7 +134,7 @@ def experiment(
         total_gain = None
         for use_valid in (False, True):
             dimportance = dvalid if use_valid else dtrain
-            domain = "in" if use_valid else "out"
+            domain = "out" if use_valid else "in"
             for ifa in ("PreDecomp", "SHAP"):
                 contributions, gradient = compute_contribution_gradient(
                     dimportance, boosters, num_boost_round, param, ifa
@@ -160,10 +161,10 @@ def experiment(
 
         assert total_gain is not None, "Remember to calculate total gain estimation"
 
-        error = validate_total_gain(total_gain, dtrain, num_boost_round, param)
+        rel_error = validate_total_gain(total_gain, dtrain, num_boost_round, param)
         mdi_error_row.append(
             {
-                "error": error,
+                "rel_error": rel_error,
                 **common,
             }
         )
@@ -186,6 +187,6 @@ if __name__ == "__main__":
         "num_boost_round": (400, (200, 400, 600, 800, 1000)),
         "reg_lambda": (1, (0.1, 1, 5, 10, 50, 100)),
     }
-    agg_by = "max_depth"
+    agg_by = "num_boost_round"
 
     main(data_root, grid, agg_by)
