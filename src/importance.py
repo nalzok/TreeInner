@@ -1,4 +1,5 @@
 from typing import Dict, List, Tuple
+from numbers import Number
 
 import numpy as np
 import pandas as pd
@@ -38,6 +39,32 @@ def train_boosters(
     return boosters
 
 
+def evaluate_boosters(
+    dimportance: xgb.DMatrix,
+    boosters: List[xgb.Booster],
+    num_boost_round: int,
+    param: Dict,
+) -> Number:
+    assert len(boosters) == num_boost_round, f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
+
+    dimportance.set_base_margin([])
+
+    # calculate baseline prediction accuracy
+    base_margin = np.full(dimportance.num_row(), param["base_score"])
+    for bst in boosters[:num_boost_round]:
+        base_margin = bst.predict(dimportance, output_margin=True)
+        dimportance.set_base_margin(base_margin)
+    trans = margin2pred[param["objective"]]
+    predictions = trans(base_margin)
+
+    if param["objective"] in ("reg:squarederror", "reg:linear"):
+        risk = -mean_squared_error(dimportance.get_label(), predictions)
+    else:
+        risk = roc_auc_score(dimportance.get_label(), predictions)
+
+    return risk
+
+
 def compute_contribution_gradient(
     dimportance: xgb.DMatrix,
     boosters: List[xgb.Booster],
@@ -45,6 +72,8 @@ def compute_contribution_gradient(
     param: Dict,
     ifa: str,
 ) -> Tuple[np.ndarray, np.ndarray]:
+    assert len(boosters) == num_boost_round, f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
+
     # reset the margin of dimportance
     dimportance.set_base_margin([])
 
@@ -122,6 +151,8 @@ def permutation_importance(
     param: Dict,
     perm_round: int,
 ) -> np.ndarray:
+    assert len(boosters) == num_boost_round, f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
+
     # build DMatrix from data frames
     dimportance = xgb.DMatrix(X_valid, Y_valid, silent=True)
 

@@ -1,3 +1,5 @@
+from typing import Dict, Tuple, Sequence, List
+from numbers import Number
 from pathlib import Path
 
 import xgboost as xgb
@@ -7,6 +9,7 @@ from tqdm import trange, tqdm
 from sklearn.metrics import roc_auc_score
 from .importance import (
     train_boosters,
+    evaluate_boosters,
     compute_contribution_gradient,
     feature_importance,
     permutation_importance,
@@ -15,30 +18,24 @@ from .importance import (
 from .visualize import visualize
 
 
-def main(data_root, num_boost_round, param, max_depth_list):
-    for name in ["eta", "reg_lambda"]:
-        assert name in param, "{} should be in param.".format(name)
-
-    param_str = "+".join(k + "=" + str(v) for k, v in param.items()).replace(".", "p")
+def main(data_root: Path, grid: Dict[str, Tuple[Number, Sequence[Number]]], agg_by: str):
+    keys = ("eta", "max_depth", "min_child_weight", "num_boost_round", "reg_lambda")
+    for name in keys:
+        assert name in grid, f"{name} should be in param."
+    assert agg_by in keys, "Must aggregate by a hyperparameter"
 
     oracle_auc_row = []
     mdi_error_row = []
 
     for subproblem in ("classification", "regression"):
-        param["objective"] = (
-            "binary:logistic" if subproblem == "classification" else "reg:squarederror"
-        )
-        param["base_score"] = 0.5 if subproblem == "classification" else 0.0
-
         for subproblem_id in (1, 2):
             print(f"Working on {subproblem}{subproblem_id}")
             subdirectory = data_root / f"{subproblem}{subproblem_id}"
-            for dataset_id in trange(2, leave=False):
+            for dataset_id in trange(10, leave=False):
                 experiment(
                     subdirectory,
-                    num_boost_round,
-                    param,
-                    max_depth_list,
+                    grid.copy(),
+                    agg_by,
                     subproblem,
                     subproblem_id,
                     dataset_id,
@@ -51,24 +48,23 @@ def main(data_root, num_boost_round, param, max_depth_list):
     (results / "plots").mkdir(parents=True, exist_ok=True)
 
     oracle_auc = pd.DataFrame(oracle_auc_row)
-    oracle_auc.to_csv(results / "csv" / f"oracle-auc+{param_str}.csv")
+    oracle_auc.to_csv(results / "csv" / f"auc-by-{agg_by}.csv")
 
     mdi_error = pd.DataFrame(mdi_error_row)
-    mdi_error.to_csv(results / "csv" / f"mdi-error+{param_str}.csv")
+    mdi_error.to_csv(results / "csv" / f"error-by-{agg_by}.csv")
 
-    visualize(results, param_str)
+    visualize(results, agg_by)
 
 
 def experiment(
-    subdirectory,
-    num_boost_round,
-    param,
-    max_depth_list,
-    subproblem,
-    subproblem_id,
-    dataset_id,
-    oracle_auc_row,
-    mdi_error_row,
+    subdirectory: Path,
+    grid: Dict[str, Tuple[Number, Sequence[Number]]],
+    agg_by: str,
+    subproblem: str,
+    subproblem_id: int,
+    dataset_id: int,
+    oracle_auc_row: List,
+    mdi_error_row: List,
 ):
     X_train = pd.read_csv(
         subdirectory / f"permuted{dataset_id}_X_train.csv", header=None
@@ -91,41 +87,54 @@ def experiment(
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
     dvalid = xgb.DMatrix(X_valid, Y_valid, silent=True)
 
-    for max_depth in tqdm(max_depth_list, leave=False):
-        param["max_depth"] = max_depth
+    objective = "binary:logistic" if subproblem == "classification" else "reg:squarederror"
+    base_score = 0.5 if subproblem == "classification" else 0.0
+    param = {
+        "objective": objective,
+        "base_score": base_score,
+    }
+
+    _, sweep = grid.pop(agg_by)
+    for k, (default, _) in grid.items():
+        param[k] = default
+
+    for val in tqdm(sweep, leave=False):
+        param[agg_by] = val
+        num_boost_round = param.pop("num_boost_round")
+
         boosters = train_boosters(dtrain, num_boost_round, param)
+        risk_train = evaluate_boosters(dtrain, boosters, num_boost_round, param)
+        risk_valid = evaluate_boosters(dvalid, boosters, num_boost_round, param)
 
         common = {
             "subproblem": subproblem,
             "subproblem_id": subproblem_id,
             "dataset_id": dataset_id,
-            "max_depth": max_depth,
+            "risk_train": risk_train,
+            "risk_valid": risk_valid,
+            agg_by: val,
         }
 
-        score = permutation_importance(
-            boosters, num_boost_round, X_valid, Y_valid, param, 5
-        )
-        oracle_auc_row.append(
-            {
-                "method": "Permutation",
-                "auc_noisy": roc_auc_score(signal, score),
-                **common,
-            }
-        )
-
-        use_valid_list = (False, True)
-        ifa_list = ("PreDecomp", "SHAP")
-        gfa_list = ("Abs", "Inner")
-        result = {}
+        # score = permutation_importance(
+        #     boosters, num_boost_round, X_valid, Y_valid, param, 5
+        # )
+        # oracle_auc_row.append(
+        #     {
+        #         "method": "Permutation",
+        #         "auc_noisy": roc_auc_score(signal, score),
+        #         **common,
+        #     }
+        # )
 
         total_gain = None
-        for use_valid in use_valid_list:
+        for use_valid in (False, True):
             dimportance = dvalid if use_valid else dtrain
-            for ifa in ifa_list:
+            domain = "in" if use_valid else "out"
+            for ifa in ("PreDecomp", "SHAP"):
                 contributions, gradient = compute_contribution_gradient(
                     dimportance, boosters, num_boost_round, param, ifa
                 )
-                for gfa in gfa_list:
+                for gfa in ("Abs", "Inner"):
                     score = feature_importance(
                         contributions,
                         gradient,
@@ -134,22 +143,19 @@ def experiment(
                     )
                     if use_valid is False and ifa == "PreDecomp" and gfa == "Inner":
                         total_gain = score
-                    result[(use_valid, ifa, gfa)] = score
-        assert total_gain is not None, "Remember to calculate total gain estimation"
 
-        # reorder experiment results
-        for gfa in gfa_list:
-            for ifa in ifa_list:
-                for use_valid in use_valid_list:
-                    domain = "in" if use_valid else "out"
-                    score = result[(use_valid, ifa, gfa)]
                     oracle_auc_row.append(
                         {
-                            "method": f"{gfa}-{ifa}-{domain}",
+                            "gfa": gfa,
+                            "ifa": ifa,
+                            "domain": domain,
                             "auc_noisy": roc_auc_score(signal, score),
                             **common,
                         }
                     )
+
+        assert total_gain is not None, "Remember to calculate total gain estimation"
+
 
         error = validate_total_gain(total_gain, dtrain, num_boost_round, param)
         mdi_error_row.append(
@@ -159,6 +165,8 @@ def experiment(
             }
         )
 
+        param["num_boost_round"] = num_boost_round
+
 
 if __name__ == "__main__":
     assert xgb.__version__ == "1.6.2-dev", "A custom fork of XGBoost is required."
@@ -167,11 +175,14 @@ if __name__ == "__main__":
 
     data_root = Path("04_aggregate")
 
-    num_boost_round = 500
-    param = {
-        "eta": 0.1,
-        "reg_lambda": 1,
+    grid = {
+        # name: (default, sweep)
+        "eta": (0.1, (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)),
+        "max_depth": (6, (2, 4, 6, 8, 10)),
+        "min_child_weight": (1, (1, 3, 5, 7, 9)),
+        "num_boost_round": (400, (200, 400, 600, 800, 1000)),
+        "reg_lambda": (1, (1, 2, 4, 8, 16)),
     }
-    max_depth_list = (1, 2, 4, 8, 16)
+    agg_by = "num_boost_round"
 
-    main(data_root, num_boost_round, param, max_depth_list)
+    main(data_root, grid, agg_by)
