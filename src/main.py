@@ -18,7 +18,9 @@ from .importance import (
 from .visualize import visualize
 
 
-def main(data_root: Path, grid: Dict[str, Tuple[Number, Sequence[Number]]], agg_by: str):
+def main(
+    data_root: Path, grid: Dict[str, Tuple[Number, Sequence[Number]]], agg_by: str
+):
     keys = ("eta", "max_depth", "min_child_weight", "num_boost_round", "reg_lambda")
     for name in keys:
         assert name in grid, f"{name} should be in param."
@@ -87,7 +89,9 @@ def experiment(
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
     dvalid = xgb.DMatrix(X_valid, Y_valid, silent=True)
 
-    objective = "binary:logistic" if subproblem == "classification" else "reg:squarederror"
+    objective = (
+        "binary:logistic" if subproblem == "classification" else "reg:squarederror"
+    )
     base_score = 0.5 if subproblem == "classification" else 0.0
     param = {
         "objective": objective,
@@ -155,7 +159,6 @@ def experiment(
                     )
 
         assert total_gain is not None, "Remember to calculate total gain estimation"
-
 
         error = validate_total_gain(total_gain, dtrain, num_boost_round, param)
         mdi_error_row.append(

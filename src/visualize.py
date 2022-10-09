@@ -36,7 +36,7 @@ def visualize(results: Path, agg_by: str):
         errorbar=None,
         height=16,
         aspect=2,
-        facet_kws=dict(ylim=(0, 1))
+        facet_kws=dict(ylim=(0, 1)),
     )
     # g.map(sns.lineplot, agg_by, "risk_valid", color="pink", errorbar=None, lw=3)
     g.savefig(fig_name)
@@ -56,7 +56,7 @@ def visualize(results: Path, agg_by: str):
         sizes={"Abs": 100, "Inner": 200},
         height=16,
         aspect=2,
-        facet_kws=dict(sharex=False)
+        facet_kws=dict(sharex=False),
     )
     g.savefig(fig_name)
 

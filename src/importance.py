@@ -45,7 +45,9 @@ def evaluate_boosters(
     num_boost_round: int,
     param: Dict,
 ) -> Number:
-    assert len(boosters) == num_boost_round, f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
+    assert (
+        len(boosters) == num_boost_round
+    ), f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
 
     dimportance.set_base_margin([])
 
@@ -72,7 +74,9 @@ def compute_contribution_gradient(
     param: Dict,
     ifa: str,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    assert len(boosters) == num_boost_round, f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
+    assert (
+        len(boosters) == num_boost_round
+    ), f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
 
     # reset the margin of dimportance
     dimportance.set_base_margin([])
@@ -151,7 +155,9 @@ def permutation_importance(
     param: Dict,
     perm_round: int,
 ) -> np.ndarray:
-    assert len(boosters) == num_boost_round, f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
+    assert (
+        len(boosters) == num_boost_round
+    ), f"Ensemble size mismatch: {len(boosters)} != {num_boost_round}"
 
     # build DMatrix from data frames
     dimportance = xgb.DMatrix(X_valid, Y_valid, silent=True)
