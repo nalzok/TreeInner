@@ -13,10 +13,15 @@ def visualize(results: Path, agg_by: str):
 
     by = ["subproblem", "subproblem_id", agg_by, "gfa", "ifa", "domain"]
     auc_mean_std = oracle_auc.groupby(by).agg(
-        auc_mean=("auc_noisy", "mean"), auc_std=("auc_noisy", "std")
+        auc_noisy_mean=("auc_noisy", "mean"),
+        auc_noisy_std=("auc_noisy", "std"),
+        risk_valid_mean=("risk_valid", "mean"),
+        risk_valid_std=("risk_valid", "std"),
     )
-    print(auc_mean_std.to_latex())
+    # print(auc_mean_std.to_latex())
 
+    fig_name = results / "plots" / f"auc-by-{agg_by}.png"
+    print("Creating", fig_name)
     g = sns.relplot(
         data=oracle_auc,
         x=agg_by,
@@ -27,17 +32,39 @@ def visualize(results: Path, agg_by: str):
         style="domain",
         hue="ifa",
         size="gfa",
+        sizes={"Abs": 1, "Inner": 4},
         errorbar=None,
         height=16,
         aspect=2,
+        facet_kws=dict(ylim=(0, 1))
     )
     # g.map(sns.lineplot, agg_by, "risk_valid", color="pink", errorbar=None, lw=3)
-    g.savefig(results / "plots" / f"auc-by-{agg_by}.png")
+    g.savefig(fig_name)
 
+    fig_name = results / "plots" / f"auc-risk-by-{agg_by}.png"
+    print("Creating", fig_name)
+    g = sns.relplot(
+        data=auc_mean_std,
+        x="risk_valid_mean",
+        y="auc_noisy_mean",
+        row="subproblem",
+        col="subproblem_id",
+        kind="scatter",
+        style="domain",
+        hue="ifa",
+        size="gfa",
+        sizes={"Abs": 100, "Inner": 200},
+        height=16,
+        aspect=2,
+        facet_kws=dict(sharex=False)
+    )
+    g.savefig(fig_name)
 
     mdi_error = pd.read_csv(results / "csv" / f"error-by-{agg_by}.csv")
     mdi_error["log10(error)"] = np.log10(mdi_error["error"])
 
+    fig_name = results / "plots" / f"error-by-{agg_by}.png"
+    print("Creating", fig_name)
     g = sns.catplot(
         data=mdi_error,
         x=agg_by,
@@ -46,7 +73,7 @@ def visualize(results: Path, agg_by: str):
         col="subproblem_id",
         kind="box",
     )
-    g.savefig(results / "plots" / f"error-by-{agg_by}.png")
+    g.savefig(fig_name)
 
 
 @click.command()

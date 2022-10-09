@@ -177,12 +177,12 @@ if __name__ == "__main__":
 
     grid = {
         # name: (default, sweep)
-        "eta": (0.1, (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)),
+        "eta": (0.3, (0.01, 0.1, 0.3, 1)),
         "max_depth": (6, (2, 4, 6, 8, 10)),
-        "min_child_weight": (1, (1, 3, 5, 7, 9)),
+        "min_child_weight": (1, (0.5, 1, 2, 4, 8)),
         "num_boost_round": (400, (200, 400, 600, 800, 1000)),
-        "reg_lambda": (1, (1, 2, 4, 8, 16)),
+        "reg_lambda": (1, (0.1, 1, 5, 10, 50, 100)),
     }
-    agg_by = "num_boost_round"
+    agg_by = "max_depth"
 
     main(data_root, grid, agg_by)
