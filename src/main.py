@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from tqdm import trange, tqdm
 from sklearn.metrics import roc_auc_score
-import seaborn as sns
 from .importance import (
     train_boosters,
     compute_contribution_gradient,
@@ -13,6 +12,7 @@ from .importance import (
     permutation_importance,
     validate_total_gain,
 )
+from .visualize import visualize
 
 
 def main(data_root, num_boost_round, param, max_depth_list):
@@ -33,7 +33,7 @@ def main(data_root, num_boost_round, param, max_depth_list):
         for subproblem_id in (1, 2):
             print(f"Working on {subproblem}{subproblem_id}")
             subdirectory = data_root / f"{subproblem}{subproblem_id}"
-            for dataset_id in trange(40, leave=False):
+            for dataset_id in trange(2, leave=False):
                 experiment(
                     subdirectory,
                     num_boost_round,
@@ -102,16 +102,16 @@ def experiment(
             "max_depth": max_depth,
         }
 
-        # score = permutation_importance(
-        #     boosters, num_boost_round, X_valid, Y_valid, param, 5
-        # )
-        # oracle_auc_row.append(
-        #     {
-        #         "method": "Permutation",
-        #         "auc_noisy": roc_auc_score(signal, score),
-        #         **common,
-        #     }
-        # )
+        score = permutation_importance(
+            boosters, num_boost_round, X_valid, Y_valid, param, 5
+        )
+        oracle_auc_row.append(
+            {
+                "method": "Permutation",
+                "auc_noisy": roc_auc_score(signal, score),
+                **common,
+            }
+        )
 
         use_valid_list = (False, True)
         ifa_list = ("PreDecomp", "SHAP")
@@ -160,39 +160,10 @@ def experiment(
         )
 
 
-def visualize(results, param_str):
-    oracle_auc = pd.read_csv(results / "csv" / f"oracle-auc+{param_str}.csv")
-    sns_plot = sns.catplot(
-        x="max_depth",
-        y="auc_noisy",
-        col="subproblem",
-        row="subproblem_id",
-        hue="method",
-        kind="box",
-        data=oracle_auc,
-        height=16,
-        aspect=2,
-    )
-    sns_plot.savefig(results / "plots" / f"oracle-auc+{param_str}.png")
-
-    mdi_error = pd.read_csv(results / "csv" / f"mdi-error+{param_str}.csv")
-    mdi_error["log10(error)"] = np.log10(mdi_error["error"])
-    sns_plot = sns.catplot(
-        x="max_depth",
-        y="log10(error)",
-        col="subproblem",
-        row="subproblem_id",
-        kind="box",
-        data=mdi_error,
-    )
-    sns_plot.savefig(results / "plots" / f"mdi-error+{param_str}.png")
-
-
 if __name__ == "__main__":
     assert xgb.__version__ == "1.6.2-dev", "A custom fork of XGBoost is required."
 
     np.random.seed(42)
-    sns.set_theme(style="whitegrid", rc={"savefig.dpi": 300})
 
     data_root = Path("04_aggregate")
 
@@ -201,6 +172,6 @@ if __name__ == "__main__":
         "eta": 0.1,
         "reg_lambda": 1,
     }
-    max_depth_list = (2, 4, 6, 8)
+    max_depth_list = (1, 2, 4, 8, 16)
 
     main(data_root, num_boost_round, param, max_depth_list)
