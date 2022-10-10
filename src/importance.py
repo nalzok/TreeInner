@@ -136,7 +136,11 @@ def feature_importance(
 ) -> np.ndarray:
     if gfa == "Inner":
         gradient_by_tree = gradient_by_tree[:, :, np.newaxis]
-        MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
+        # MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
+        MDI = np.sum(
+            np.sum(contributions_by_tree, axis=0) * np.sum(gradient_by_tree, axis=0),
+            axis=0
+        )
         MDI = MDI[:-1] / param["eta"]
     elif gfa == "Abs":
         # ignore the per-tree bias
