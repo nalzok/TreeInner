@@ -16,6 +16,7 @@ click = "*"
 [dev-packages]
 black = "*"
 pyinstrument = "*"
+jupyterlab = "*"
 
 [requires]
 python_version = "3.8"

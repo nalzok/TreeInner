@@ -6,10 +6,10 @@ import seaborn as sns
 import click
 
 
-def visualize(results: Path, agg_by: str):
+def visualize(results: Path, data_root: Path, agg_by: str):
     sns.set_theme(style="whitegrid", rc={"savefig.dpi": 300})
 
-    oracle_auc = pd.read_csv(results / "csv" / f"auc-by-{agg_by}.csv")
+    oracle_auc = pd.read_csv(results / "csv" / f"auc-by-{agg_by}-{data_root}.csv")
 
     by = ["distribution", "subproblem", agg_by, "gfa", "ifa", "domain"]
     auc_mean_std = oracle_auc.groupby(by).agg(
@@ -20,7 +20,7 @@ def visualize(results: Path, agg_by: str):
     )
     # print(auc_mean_std.to_latex())
 
-    fig_name = results / "plots" / f"auc-by-{agg_by}.png"
+    fig_name = results / "plots" / f"auc-by-{agg_by}-{data_root}.png"
     print("Creating", fig_name)
     g = sns.relplot(
         data=oracle_auc,
@@ -41,7 +41,7 @@ def visualize(results: Path, agg_by: str):
     )
     g.savefig(fig_name)
 
-    fig_name = results / "plots" / f"auc-risk-by-{agg_by}.png"
+    fig_name = results / "plots" / f"auc-risk-by-{agg_by}-{data_root}.png"
     print("Creating", fig_name)
     g = sns.relplot(
         data=auc_mean_std,
@@ -56,14 +56,14 @@ def visualize(results: Path, agg_by: str):
         sizes={"Abs": 100, "Inner": 200},
         height=8,
         aspect=2,
-        facet_kws=dict(sharex=False),
+        facet_kws=dict(ylim=(0, 1), sharex=False),
     )
     g.savefig(fig_name)
 
-    mdi_error = pd.read_csv(results / "csv" / f"error-by-{agg_by}.csv")
+    mdi_error = pd.read_csv(results / "csv" / f"error-by-{agg_by}-{data_root}.csv")
     mdi_error["log10(rel_error)"] = np.log10(mdi_error["rel_error"])
 
-    fig_name = results / "plots" / f"error-by-{agg_by}.png"
+    fig_name = results / "plots" / f"error-by-{agg_by}-{data_root}.png"
     print("Creating", fig_name)
     g = sns.catplot(
         data=mdi_error,

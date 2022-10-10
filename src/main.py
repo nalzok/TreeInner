@@ -29,11 +29,11 @@ def main(
     oracle_auc_row = []
     mdi_error_row = []
 
-    for subproblem in ("classification", "regression"):
-        for distribution_id in (1, 2):
+    for distribution_id in (2, 1):
+        for subproblem in ("classification", "regression"):
             print(f"Working on {subproblem}{distribution_id}")
             subdirectory = data_root / f"{subproblem}{distribution_id}"
-            for dataset_id in trange(20, leave=False):
+            for dataset_id in trange(40, leave=False):
                 experiment(
                     subdirectory,
                     grid.copy(),
@@ -50,12 +50,12 @@ def main(
     (results / "plots").mkdir(parents=True, exist_ok=True)
 
     oracle_auc = pd.DataFrame(oracle_auc_row)
-    oracle_auc.to_csv(results / "csv" / f"auc-by-{agg_by}.csv")
+    oracle_auc.to_csv(results / "csv" / f"auc-by-{agg_by}-{data_root}.csv")
 
     mdi_error = pd.DataFrame(mdi_error_row)
-    mdi_error.to_csv(results / "csv" / f"error-by-{agg_by}.csv")
+    mdi_error.to_csv(results / "csv" / f"error-by-{agg_by}-{data_root}.csv")
 
-    visualize(results, agg_by)
+    visualize(results, data_root, agg_by)
 
 
 def experiment(
@@ -84,7 +84,7 @@ def experiment(
         subdirectory / f"permuted{dataset_id}_noisy_features.csv", header=None
     )
 
-    signal = -noisy.round(0).astype(int)
+    signal = 1 - noisy.round(0).astype(int)
     # build DMatrix from data frames
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
     dvalid = xgb.DMatrix(X_valid, Y_valid, silent=True)
@@ -177,16 +177,17 @@ if __name__ == "__main__":
 
     np.random.seed(42)
 
-    data_root = Path("04_aggregate")
+    data_roots = (Path("04_aggregate_2019"), Path("04_aggregate_2022"))
 
     grid = {
         # name: (default, sweep)
-        "eta": (0.3, (0.01, 0.1, 0.3, 1)),
-        "max_depth": (6, (2, 4, 6, 8, 10)),
-        "min_child_weight": (1, (0.5, 1, 2, 4, 8)),
+        "eta": (0.3, (0.01, 0.03, 0.1, 0.3, 1)),
+        "max_depth": (6, (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)),
+        "min_child_weight": (1, (0, 0.5, 1, 2, 4, 8)),
         "num_boost_round": (400, (200, 400, 600, 800, 1000)),
         "reg_lambda": (1, (0.1, 1, 5, 10, 50, 100)),
     }
     agg_by = "num_boost_round"
 
-    main(data_root, grid, agg_by)
+    for data_root in data_roots:
+        main(data_root, grid, agg_by)

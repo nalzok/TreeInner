@@ -157,5 +157,6 @@ tags
 
 # End of https://www.gitignore.io/api/r,c++,vim,linux,macos,jupyternotebooks
 
-04_aggregate/
+04_aggregate_2022/
+04_aggregate_2019/
 results/
