@@ -185,7 +185,7 @@ if __name__ == "__main__":
         "max_depth": (6, (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)),
         "min_child_weight": (1, (0, 0.5, 1, 2, 4, 8)),
         "num_boost_round": (400, (200, 400, 600, 800, 1000)),
-        "reg_lambda": (1, (0.1, 1, 5, 10, 50, 100)),
+        "reg_lambda": (1, (0, 0.1, 1, 10, 100)),
     }
     agg_by = "num_boost_round"
 
