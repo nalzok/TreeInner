@@ -8,6 +8,7 @@ import click
 
 def visualize(results: Path, data_root: Path, agg_by: str):
     sns.set_theme(style="whitegrid", rc={"savefig.dpi": 300})
+    log_xscale = {"eta", "reg_lambda"}
 
     oracle_auc = pd.read_csv(results / "csv" / f"auc-by-{agg_by}-{data_root}.csv")
     oracle_auc["style"] = oracle_auc["ifa"] + "." + oracle_auc["domain"]
@@ -60,6 +61,8 @@ def visualize(results: Path, data_root: Path, agg_by: str):
             aspect=2,
             facet_kws=facet_kws,
         )
+        if agg_by in log_xscale:
+            g.set(xscale="log")
         g.fig.suptitle(f"{metric} by {agg_by} on {data_root}")
         g.savefig(fig_name)
 
@@ -82,6 +85,8 @@ def visualize(results: Path, data_root: Path, agg_by: str):
         aspect=2,
         facet_kws=facet_kws,
     )
+    if agg_by in log_xscale:
+        g.set(xscale="log")
     g.fig.suptitle(f"risk by {agg_by} on {data_root}")
     g.savefig(fig_name)
 
