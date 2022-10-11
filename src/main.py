@@ -202,7 +202,12 @@ if __name__ == "__main__":
         "t1v-n-e307e167-w-0": "max_depth",
         "t1v-n-1a9a925f-w-0": "min_child_weight",
         "t1v-n-27b5cb33-w-0": "num_boost_round",
-        "t1v-n-22232754-w-0": "reg_lambda"
+        "t1v-n-22232754-w-0": "reg_lambda",
+        "t1v-n-b3b1d21c-w-0": "eta",
+        "t1v-n-e0be67a2-w-0": "max_depth",
+        "t1v-n-eb833360-w-0": "min_child_weight",
+        "t1v-n-80084fef-w-0": "num_boost_round",
+        "t1v-n-681a4736-w-0": "reg_lambda",
     }
     agg_by = work[node]
     print(f"{agg_by=}")
