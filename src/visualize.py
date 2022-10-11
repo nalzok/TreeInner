@@ -10,7 +10,7 @@ def visualize(results: Path, data_root: Path, agg_by: str):
     sns.set_theme(style="whitegrid", rc={"savefig.dpi": 300})
 
     oracle_auc = pd.read_csv(results / "csv" / f"auc-by-{agg_by}-{data_root}.csv")
-    oracle_auc["style"] = oracle_auc["ifa"] + "." +  oracle_auc["domain"]
+    oracle_auc["style"] = oracle_auc["ifa"] + "." + oracle_auc["domain"]
 
     # by = ["distribution", "subproblem", agg_by, "gfa", "ifa", "domain"]
     # auc_mean_std = oracle_auc.groupby(by).agg(
@@ -24,6 +24,12 @@ def visualize(results: Path, data_root: Path, agg_by: str):
     for metric in ("auc", "score_noisy", "score_signal"):
         fig_name = results / "plots" / f"{metric}-by-{agg_by}-{data_root}.png"
         print("Creating", fig_name)
+        facet_kws = {}
+        if metric == "auc":
+            facet_kws["ylim"] = (0, 1)
+        else:
+            facet_kws["sharey"] = False
+
         g = sns.relplot(
             data=oracle_auc,
             x=agg_by,
@@ -52,10 +58,41 @@ def visualize(results: Path, data_root: Path, agg_by: str):
             errorbar=None,
             height=8,
             aspect=2,
-            facet_kws=dict(ylim=(0, 1)) if metric == "auc" else {},
+            facet_kws=facet_kws,
         )
         g.fig.suptitle(f"{metric} by {agg_by} on {data_root}")
         g.savefig(fig_name)
+
+    by = ["distribution", "subproblem", agg_by]
+    risk_mean_std = oracle_auc.groupby(by).agg(
+        risk_train_mean=("risk_train", "mean"),
+        risk_train_std=("risk_train", "std"),
+        risk_valid_mean=("risk_valid", "mean"),
+        risk_valid_std=("risk_valid", "std"),
+    )
+
+    fig_name = results / "plots" / f"risk-by-{agg_by}-{data_root}.png"
+    print("Creating", fig_name)
+    facet_kws = {}
+    if metric == "auc":
+        facet_kws["ylim"] = (0, 1)
+    else:
+        facet_kws["sharey"] = False
+
+    g = sns.relplot(
+        data=risk_mean_std,
+        x=agg_by,
+        y="risk_valid_mean",
+        row="distribution",
+        col="subproblem",
+        kind="line",
+        errorbar=None,
+        height=8,
+        aspect=2,
+        facet_kws=facet_kws,
+    )
+    g.fig.suptitle(f"risk by {agg_by} on {data_root}")
+    g.savefig(fig_name)
 
     mdi_error = pd.read_csv(results / "csv" / f"error-by-{agg_by}-{data_root}.csv")
     mdi_error["log10(rel_error)"] = np.log10(mdi_error["rel_error"])
@@ -75,7 +112,9 @@ def visualize(results: Path, data_root: Path, agg_by: str):
 
 @click.command()
 @click.option("--results", type=click.Path(path_type=Path), default="results")
-@click.option("--data_root", type=click.Path(path_type=Path), default="04_aggregate_2019")
+@click.option(
+    "--data_root", type=click.Path(path_type=Path), default="04_aggregate_2019"
+)
 @click.option("--agg_by", type=str, required=True)
 def cli(results: Path, data_root: Path, agg_by: str):
     visualize(results, data_root, agg_by)

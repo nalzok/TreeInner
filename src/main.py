@@ -151,22 +151,22 @@ def experiment(
                         }
                     )
 
-            X_importance = X_valid if use_valid else X_train
-            Y_importance = Y_valid if use_valid else Y_train
-            score = permutation_importance(
-                boosters, num_boost_round, X_importance, Y_importance, param, 5
-            )
-            oracle_auc_row.append(
-                {
-                    "gfa": "Permutation",
-                    "ifa": "Permutation",
-                    "domain": domain,
-                    "auc": roc_auc_score(signal, score),
-                    "score_noisy": score[signal == 0].mean(),
-                    "score_signal": score[signal == 1].mean(),
-                    **common,
-                }
-            )
+            # X_importance = X_valid if use_valid else X_train
+            # Y_importance = Y_valid if use_valid else Y_train
+            # score = permutation_importance(
+            #     boosters, num_boost_round, X_importance, Y_importance, param, 5
+            # )
+            # oracle_auc_row.append(
+            #     {
+            #         "gfa": "Permutation",
+            #         "ifa": "Permutation",
+            #         "domain": domain,
+            #         "auc": roc_auc_score(signal, score),
+            #         "score_noisy": score[signal == 0].mean(),
+            #         "score_signal": score[signal == 1].mean(),
+            #         **common,
+            #     }
+            # )
 
         assert total_gain is not None, "Remember to calculate total gain estimation"
 
@@ -182,13 +182,15 @@ def experiment(
 
 
 if __name__ == "__main__":
-    assert xgb.__version__ == "1.6.2-dev", "Please install xgboost-1.6.2.dev0-cp38-cp38-linux_x86_64.whl."
+    assert (
+        xgb.__version__ == "1.6.2-dev"
+    ), "Please install xgboost-1.6.2.dev0-cp38-cp38-linux_x86_64.whl."
 
     np.random.seed(42)
 
     grid = {
         # name: (default, sweep)
-        "eta": (0.3, (0.01, 0.03, 0.1, 0.3, 1)),
+        "eta": (0.1, (0.01, 0.03, 0.1, 0.3, 1)),
         "max_depth": (6, (2, 4, 6, 8, 10)),
         "min_child_weight": (1, (0, 0.5, 1, 2, 4, 8)),
         "num_boost_round": (400, (200, 400, 600, 800, 1000)),
