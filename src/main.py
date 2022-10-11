@@ -34,7 +34,7 @@ def main(
         for subproblem in ("classification", "regression"):
             print(f"Working on {subproblem}{distribution_id}")
             subdirectory = data_root / f"{subproblem}{distribution_id}"
-            for dataset_id in trange(40, leave=False):
+            for dataset_id in trange(4, leave=False):
                 experiment(
                     subdirectory,
                     grid.copy(),
@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
     grid = {
         # name: (default, sweep)
-        "eta": (0.1, (0.01, 0.03, 0.1, 0.3, 1)),
+        "eta": (1e-2, (1e-5, 1e-4, 1e-3, 1e-2, 1)),
         "max_depth": (6, (2, 4, 6, 8, 10)),
         "min_child_weight": (1, (0, 0.5, 1, 2, 4, 8)),
         "num_boost_round": (400, (200, 400, 600, 800, 1000)),
