@@ -52,7 +52,7 @@ def evaluate_boosters(
     dimportance.set_base_margin([])
 
     # calculate baseline prediction accuracy
-    base_margin = np.full(dimportance.num_row(), param["base_score"])
+    base_margin = np.zeros(dimportance.num_row())
     for bst in boosters[:num_boost_round]:
         base_margin = bst.predict(dimportance, output_margin=True)
         dimportance.set_base_margin(base_margin)
@@ -88,12 +88,11 @@ def compute_contribution_gradient(
     )
 
     # store the (negative) gradient for each tree
-    gradient_by_tree = np.zeros(
+    gradient_by_tree = np.empty(
         (num_boost_round, dimportance.num_row()), dtype=np.float32
     )
-    gradient_by_tree[0, :] = dimportance.get_label() - param["base_score"]
 
-    base_margin = np.full(dimportance.num_row(), param["base_score"])
+    base_margin = np.zeros(dimportance.num_row())
     for t, bst in enumerate(boosters[:num_boost_round]):
         # compute the contribution_by_tree
         if ifa == "PreDecomp":
@@ -117,12 +116,12 @@ def compute_contribution_gradient(
 
         contributions_by_tree[t, :, :-1] = pimportance_tree[:, :-1]
         contributions_by_tree[t, :, -1] = pimportance_tree[:, -1] - base_margin
-        base_margin = np.sum(pimportance_tree, axis=-1)
 
         trans = margin2pred[param["objective"]]
         gradient_by_tree[t, :] = dimportance.get_label() - trans(base_margin)
 
         # set the margin to incorporate all the previous trees' prediction
+        base_margin = np.sum(pimportance_tree, axis=-1)
         dimportance.set_base_margin(base_margin)
 
     return contributions_by_tree, gradient_by_tree
@@ -134,13 +133,14 @@ def feature_importance(
     param: Dict,
     gfa: str,
 ) -> np.ndarray:
-    if gfa == "Inner":
+    if gfa == "TreeInner":
         gradient_by_tree = gradient_by_tree[:, :, np.newaxis]
-        # MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
-        MDI = np.sum(
-            np.sum(contributions_by_tree, axis=0) * np.sum(gradient_by_tree, axis=0),
-            axis=0
-        )
+        MDI = np.sum(contributions_by_tree * gradient_by_tree, axis=(0, 1))
+        MDI = MDI[:-1] / param["eta"]
+    elif gfa == "ForestInner":
+        contributions = np.sum(contributions_by_tree, axis=0)
+        gradient = np.sum(gradient_by_tree[:, :, np.newaxis], axis=0)
+        MDI = np.sum(contributions * gradient, axis=0)
         MDI = MDI[:-1] / param["eta"]
     elif gfa == "Abs":
         # ignore the per-tree bias
@@ -167,7 +167,7 @@ def permutation_importance(
     dimportance = xgb.DMatrix(X_valid, Y_valid, silent=True)
 
     # calculate baseline prediction accuracy
-    base_margin = np.full(dimportance.num_row(), param["base_score"])
+    base_margin = np.zeros(dimportance.num_row())
     for bst in boosters[:num_boost_round]:
         base_margin = bst.predict(dimportance, output_margin=True)
         dimportance.set_base_margin(base_margin)

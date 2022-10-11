@@ -1,6 +1,7 @@
 from typing import Dict, Tuple, Sequence, List
 from numbers import Number
 from pathlib import Path
+import platform
 
 import xgboost as xgb
 import numpy as np
@@ -84,7 +85,7 @@ def experiment(
         subdirectory / f"permuted{dataset_id}_noisy_features.csv", header=None
     )
 
-    signal = 1 - noisy.round(0).astype(int)
+    signal = 1 - noisy[0].round(0).to_numpy(int)
     # build DMatrix from data frames
     dtrain = xgb.DMatrix(X_train, Y_train, silent=True)
     dvalid = xgb.DMatrix(X_valid, Y_valid, silent=True)
@@ -120,17 +121,6 @@ def experiment(
             agg_by: val,
         }
 
-        # score = permutation_importance(
-        #     boosters, num_boost_round, X_valid, Y_valid, param, 5
-        # )
-        # oracle_auc_row.append(
-        #     {
-        #         "method": "Permutation",
-        #         "auc_noisy": roc_auc_score(signal, score),
-        #         **common,
-        #     }
-        # )
-
         total_gain = None
         for use_valid in (False, True):
             dimportance = dvalid if use_valid else dtrain
@@ -139,14 +129,14 @@ def experiment(
                 contributions, gradient = compute_contribution_gradient(
                     dimportance, boosters, num_boost_round, param, ifa
                 )
-                for gfa in ("Abs", "Inner"):
+                for gfa in ("TreeInner", "ForestInner", "Abs"):
                     score = feature_importance(
                         contributions,
                         gradient,
                         param,
                         gfa,
                     )
-                    if use_valid is False and ifa == "PreDecomp" and gfa == "Inner":
+                    if use_valid is False and ifa == "PreDecomp" and gfa == "TreeInner":
                         total_gain = score
 
                     oracle_auc_row.append(
@@ -154,10 +144,29 @@ def experiment(
                             "gfa": gfa,
                             "ifa": ifa,
                             "domain": domain,
-                            "auc_noisy": roc_auc_score(signal, score),
+                            "auc": roc_auc_score(signal, score),
+                            "score_noisy": score[signal == 0].mean(),
+                            "score_signal": score[signal == 1].mean(),
                             **common,
                         }
                     )
+
+            X_importance = X_valid if use_valid else X_train
+            Y_importance = Y_valid if use_valid else Y_train
+            score = permutation_importance(
+                boosters, num_boost_round, X_importance, Y_importance, param, 5
+            )
+            oracle_auc_row.append(
+                {
+                    "gfa": "Permutation",
+                    "ifa": "Permutation",
+                    "domain": domain,
+                    "auc": roc_auc_score(signal, score),
+                    "score_noisy": score[signal == 0].mean(),
+                    "score_signal": score[signal == 1].mean(),
+                    **common,
+                }
+            )
 
         assert total_gain is not None, "Remember to calculate total gain estimation"
 
@@ -173,11 +182,9 @@ def experiment(
 
 
 if __name__ == "__main__":
-    assert xgb.__version__ == "1.6.2-dev", "A custom fork of XGBoost is required."
+    assert xgb.__version__ == "1.6.2-dev", "Please install xgboost-1.6.2.dev0-cp38-cp38-linux_x86_64.whl."
 
     np.random.seed(42)
-
-    data_roots = (Path("04_aggregate_2019"), Path("04_aggregate_2022"))
 
     grid = {
         # name: (default, sweep)
@@ -187,7 +194,18 @@ if __name__ == "__main__":
         "num_boost_round": (400, (200, 400, 600, 800, 1000)),
         "reg_lambda": (1, (0, 0.1, 1, 10, 100)),
     }
-    agg_by = "num_boost_round"
 
-    for data_root in data_roots:
-        main(data_root, grid, agg_by)
+    # poor man's distributed training
+    node = platform.node()
+    work = {
+        "t1v-n-5d019513-w-0": "eta",
+        "t1v-n-e307e167-w-0": "max_depth",
+        "t1v-n-1a9a925f-w-0": "min_child_weight",
+        "t1v-n-27b5cb33-w-0": "num_boost_round",
+        "t1v-n-22232754-w-0": "reg_lambda"
+    }
+    agg_by = work[node]
+    print(f"{agg_by=}")
+
+    data_root = Path("04_aggregate_2019")
+    main(data_root, grid, agg_by)
