@@ -8,7 +8,7 @@ import click
 
 def visualize(results: Path, data_root: Path, agg_by: str):
     sns.set_theme(style="whitegrid", rc={"savefig.dpi": 300})
-    log_xscale = {"eta", "reg_lambda"}
+    log_xscale = {"eta", "min_child_weight", "reg_lambda"}
 
     oracle_auc = pd.read_csv(results / "csv" / f"auc-by-{agg_by}-{data_root}.csv")
     oracle_auc["style"] = oracle_auc["ifa"] + "." + oracle_auc["domain"]
