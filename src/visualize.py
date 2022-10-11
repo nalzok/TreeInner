@@ -63,14 +63,6 @@ def visualize(results: Path, data_root: Path, agg_by: str):
         g.fig.suptitle(f"{metric} by {agg_by} on {data_root}")
         g.savefig(fig_name)
 
-    by = ["distribution", "subproblem", agg_by]
-    risk_mean_std = oracle_auc.groupby(by).agg(
-        risk_train_mean=("risk_train", "mean"),
-        risk_train_std=("risk_train", "std"),
-        risk_valid_mean=("risk_valid", "mean"),
-        risk_valid_std=("risk_valid", "std"),
-    )
-
     fig_name = results / "plots" / f"risk-by-{agg_by}-{data_root}.png"
     print("Creating", fig_name)
     facet_kws = {}
@@ -80,13 +72,12 @@ def visualize(results: Path, data_root: Path, agg_by: str):
         facet_kws["sharey"] = False
 
     g = sns.relplot(
-        data=risk_mean_std,
+        data=oracle_auc,
         x=agg_by,
-        y="risk_valid_mean",
+        y="risk_valid",
         row="distribution",
         col="subproblem",
         kind="line",
-        errorbar=None,
         height=8,
         aspect=2,
         facet_kws=facet_kws,

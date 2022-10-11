@@ -60,9 +60,9 @@ def evaluate_boosters(
     predictions = trans(base_margin)
 
     if param["objective"] in ("reg:squarederror", "reg:linear"):
-        risk = -mean_squared_error(dimportance.get_label(), predictions)
+        risk = mean_squared_error(dimportance.get_label(), predictions)
     else:
-        risk = roc_auc_score(dimportance.get_label(), predictions)
+        risk = 1 - roc_auc_score(dimportance.get_label(), predictions)
 
     return risk
 
