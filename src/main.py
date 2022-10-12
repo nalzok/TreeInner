@@ -34,7 +34,7 @@ def main(
         for subproblem in ("classification", "regression"):
             print(f"Working on {subproblem}{distribution_id}")
             subdirectory = data_root / f"{subproblem}{distribution_id}"
-            for dataset_id in trange(2, leave=False):
+            for dataset_id in trange(40, leave=False):
                 experiment(
                     subdirectory,
                     grid.copy(),
