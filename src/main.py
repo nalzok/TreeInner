@@ -145,10 +145,10 @@ def experiment(
                             "gfa": gfa,
                             "ifa": ifa,
                             "domain": domain,
-                            "score_norm": score_norm,
                             "auc": roc_auc_score(signal, score),
-                            "score_noisy": score[signal == 0].mean() / score_norm,
-                            "score_signal": score[signal == 1].mean() / score_norm,
+                            "score_norm": score_norm,
+                            "score_noisy": score[signal == 0].mean(),
+                            "score_signal": score[signal == 1].mean(),
                             **common,
                         }
                     )
@@ -164,10 +164,10 @@ def experiment(
                     "gfa": "Permutation",
                     "ifa": "Permutation",
                     "domain": domain,
-                    "score_norm": score_norm,
                     "auc": roc_auc_score(signal, score),
-                    "score_noisy": score[signal == 0].mean() / score_norm,
-                    "score_signal": score[signal == 1].mean() / score_norm,
+                    "score_norm": score_norm,
+                    "score_noisy": score[signal == 0].mean(),
+                    "score_signal": score[signal == 1].mean(),
                     **common,
                 }
             )
