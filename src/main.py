@@ -34,7 +34,7 @@ def main(
         for subproblem in ("classification", "regression"):
             print(f"Working on {subproblem}{distribution_id}")
             subdirectory = data_root / f"{subproblem}{distribution_id}"
-            for dataset_id in trange(4, leave=False):
+            for dataset_id in trange(2, leave=False):
                 experiment(
                     subdirectory,
                     grid.copy(),
@@ -139,34 +139,38 @@ def experiment(
                     if use_valid is False and ifa == "PreDecomp" and gfa == "TreeInner":
                         total_gain = score
 
+                    score_norm = np.linalg.norm(score)
                     oracle_auc_row.append(
                         {
                             "gfa": gfa,
                             "ifa": ifa,
                             "domain": domain,
+                            "score_norm": score_norm,
                             "auc": roc_auc_score(signal, score),
-                            "score_noisy": score[signal == 0].mean(),
-                            "score_signal": score[signal == 1].mean(),
+                            "score_noisy": score[signal == 0].mean() / score_norm,
+                            "score_signal": score[signal == 1].mean() / score_norm,
                             **common,
                         }
                     )
 
-            # X_importance = X_valid if use_valid else X_train
-            # Y_importance = Y_valid if use_valid else Y_train
-            # score = permutation_importance(
-            #     boosters, num_boost_round, X_importance, Y_importance, param, 5
-            # )
-            # oracle_auc_row.append(
-            #     {
-            #         "gfa": "Permutation",
-            #         "ifa": "Permutation",
-            #         "domain": domain,
-            #         "auc": roc_auc_score(signal, score),
-            #         "score_noisy": score[signal == 0].mean(),
-            #         "score_signal": score[signal == 1].mean(),
-            #         **common,
-            #     }
-            # )
+            X_importance = X_valid if use_valid else X_train
+            Y_importance = Y_valid if use_valid else Y_train
+            score = permutation_importance(
+                boosters, num_boost_round, X_importance, Y_importance, param, 5
+            )
+            score_norm = np.linalg.norm(score)
+            oracle_auc_row.append(
+                {
+                    "gfa": "Permutation",
+                    "ifa": "Permutation",
+                    "domain": domain,
+                    "score_norm": score_norm,
+                    "auc": roc_auc_score(signal, score),
+                    "score_noisy": score[signal == 0].mean() / score_norm,
+                    "score_signal": score[signal == 1].mean() / score_norm,
+                    **common,
+                }
+            )
 
         assert total_gain is not None, "Remember to calculate total gain estimation"
 
