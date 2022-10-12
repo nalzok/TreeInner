@@ -34,7 +34,7 @@ def main(
         for subproblem in ("classification", "regression"):
             print(f"Working on {subproblem}{distribution_id}")
             subdirectory = data_root / f"{subproblem}{distribution_id}"
-            for dataset_id in trange(40, leave=False):
+            for dataset_id in trange(20, leave=False):
                 experiment(
                     subdirectory,
                     grid.copy(),
@@ -156,7 +156,7 @@ def experiment(
             X_importance = X_valid if use_valid else X_train
             Y_importance = Y_valid if use_valid else Y_train
             score = permutation_importance(
-                boosters, num_boost_round, X_importance, Y_importance, param, 5
+                boosters, num_boost_round, X_importance, Y_importance, param, 1
             )
             score_norm = np.linalg.norm(score)
             oracle_auc_row.append(
