@@ -46,7 +46,7 @@ def main(
                     mdi_error_row,
                 )
 
-    results = Path("results")
+    results = Path("final_results")
     (results / "csv").mkdir(parents=True, exist_ok=True)
     (results / "plots").mkdir(parents=True, exist_ok=True)
 
