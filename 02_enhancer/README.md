@@ -1,3 +1,3 @@
 # Enhancer Data
 
-Accessed from https://github.com/shifwang/Enhancer/tree/master/data.
+Obtained from https://github.com/shifwang/Enhancer/tree/master/data.
