@@ -34,7 +34,7 @@ def main(
         for subproblem in ("classification", "regression"):
             print(f"Working on {subproblem}{distribution_id}")
             subdirectory = data_root / f"{subproblem}{distribution_id}"
-            for dataset_id in trange(20, leave=False):
+            for dataset_id in trange(40, leave=False):
                 experiment(
                     subdirectory,
                     grid.copy(),
@@ -49,6 +49,7 @@ def main(
     results = Path("final_results")
     (results / "csv").mkdir(parents=True, exist_ok=True)
     (results / "plots").mkdir(parents=True, exist_ok=True)
+    (results / "svg").mkdir(parents=True, exist_ok=True)
 
     oracle_auc = pd.DataFrame(oracle_auc_row)
     oracle_auc.to_csv(results / "csv" / f"auc-by-{agg_by}-{data_root}.csv")
